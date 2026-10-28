@@ -1,0 +1,54 @@
+{
+  "gpu": "NVIDIA GeForce RTX 5070",
+  "capability": [
+    12,
+    0
+  ],
+  "total_memory_mib": 12199.4375,
+  "torch": "2.9.0+cu130",
+  "cuda_runtime": "13.0",
+  "transformers": "4.57.1",
+  "python": "3.12.14",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "precision": "float16",
+  "attention": "sdpa",
+  "batch_size": 1,
+  "kv_cache": true,
+  "cpu_offload": false,
+  "all_parameters_on_cuda": true,
+  "model": {
+    "model_id": "Qwen/Qwen2.5-0.5B-Instruct",
+    "revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+    "files_sha256": {
+      "config.json": "18e18afcaccafade98daf13a54092927904649e1dd4eba8299ab717d5d94ff45",
+      "generation_config.json": "e558847a8b4402616f1273797b015104dc266fe4b520056fca88823ba8f8ebe6",
+      "tokenizer.json": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+      "tokenizer_config.json": "5b5d4f65d0acd3b2d56a35b56d374a36cbc1c8fa5cf3b3febbbfabf22f359583",
+      "merges.txt": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+      "vocab.json": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+      "LICENSE": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+      "README.md": "b19c806a904db6dc878a0462e70b551f6b7ac78dfbb88c2eb966ca2b9109ae15",
+      "model.safetensors": "fdf756fa7fcbe7404d5c60e26bff1a0c8b8aa1f72ced49e7dd0210fe288fb7fe"
+    },
+    "source": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct",
+    "license": "Apache-2.0"
+  },
+  "repeats": 3,
+  "prompt_lengths": [
+    64,
+    128,
+    256,
+    512,
+    1024,
+    2048
+  ],
+  "output_lengths": [
+    16,
+    64,
+    128
+  ],
+  "output_semantics": "exact N output tokens; EOS ignored for shape-controlled timing; prefill includes first token selection; decode N-1 forwards",
+  "timing": "Wall clock with CUDA synchronization; additional CUDA-event spans, including enqueue gaps, recorded separately",
+  "limitations": "Windows WDDM desktop GPU shared with display/apps, no power/clock locking. No concurrent batch serving or vLLM.",
+  "driver": "617.42"
+}

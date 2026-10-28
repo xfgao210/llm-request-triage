@@ -1,0 +1,22 @@
+{
+  "seed": 9000,
+  "arrival_window_s": 6.0,
+  "slo_s": 1.0,
+  "arrival_rates": [
+    2,
+    6,
+    2
+  ],
+  "gpu": "NVIDIA GeForce RTX 5070",
+  "precision": "FP16",
+  "model": "Qwen2.5-0.5B-Instruct",
+  "batch": 1,
+  "output_distribution": [
+    8,
+    16,
+    32
+  ],
+  "estimated_output_tokens": 18.666666666666668,
+  "timing": "real wall clock; GPU synchronize; no HTTP/tokenization/host transfer in request latency",
+  "limitations": "One paired trial, sequential policy order; display apps share GPU; not statistical proof. Forced output length with EOS ignored."
+}

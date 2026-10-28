@@ -1,0 +1,68 @@
+{
+  "service_profile": {
+    "prefill_rate": null,
+    "decode_rate": 35.849389110100596,
+    "provenance": "measured RTX 5070 / Qwen2.5-0.5B-Instruct / torch 2.9.0+cu130 / transformers 4.57.1 / FP16 SDPA batch=1",
+    "prefill_overhead_s": 0.025490567869413613,
+    "decode_overhead_s": 0.0,
+    "prefill_quadratic_s": 3.183762086121867e-08,
+    "decode_context_s": 4.057988306430102e-08,
+    "decode_token_offset": 1
+  },
+  "validation_status": "acceptable_under_20pct_MAPE",
+  "selected_model": "context_quadratic",
+  "candidates": [
+    {
+      "kind": "through_origin",
+      "training_cv_mean_mape": 0.33189377973611317
+    },
+    {
+      "kind": "affine",
+      "training_cv_mean_mape": 0.38736579204328986
+    },
+    {
+      "kind": "context_quadratic",
+      "training_cv_mean_mape": 0.2265364490747927
+    }
+  ],
+  "holdout_diagnostics": {
+    "prefill": {
+      "mape": 0.14551985139937118,
+      "p95_ape": 0.2552710549719324,
+      "rmse_s": 0.0060994170261440845
+    },
+    "decode": {
+      "mape": 0.08952207202630513,
+      "p95_ape": 0.18104343520603186,
+      "rmse_s": 0.11001030492359799
+    },
+    "e2e": {
+      "mape": 0.07059267434548473,
+      "p95_ape": 0.12947725850202021,
+      "rmse_s": 0.10124130613806173
+    }
+  },
+  "measurements": 102,
+  "fit_shapes": 24,
+  "holdout_shapes": 10,
+  "holdout_prompt_lengths": [
+    128,
+    1024
+  ],
+  "calibration_domain": {
+    "input_tokens": [
+      32,
+      2048
+    ],
+    "output_tokens": [
+      1,
+      128
+    ]
+  },
+  "measurement_sha256": {
+    "results\\gpu\\measurements.csv": "b58602e12a6fb3965b62f7e9d630a98cc50e3f27c015c5c7b47d0ed8f533144c",
+    "results\\gpu\\short\\measurements.csv": "bc1e4120a3fe9fe7cfea59c42b212e6d97a3cea6703079f165215a83cc23c1a4"
+  },
+  "semantics": "Medians of repeated shapes; CUDA-synchronized backend wall time. Prefill selects first output; decode models max(output-1,0) forwards.",
+  "limitations": "Single small model, one desktop GPU/backend, batch=1, short contexts. Outside measured length range is extrapolation. No vLLM or concurrent batching validation."
+}

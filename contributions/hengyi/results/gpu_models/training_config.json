@@ -1,0 +1,44 @@
+{
+  "episodes": 120,
+  "training_seeds": [
+    7,
+    17,
+    27
+  ],
+  "train_windows": 32,
+  "service_profile": {
+    "prefill_rate": null,
+    "decode_rate": 35.849389110100596,
+    "provenance": "measured RTX 5070 / Qwen2.5-0.5B-Instruct / torch 2.9.0+cu130 / transformers 4.57.1 / FP16 SDPA batch=1",
+    "prefill_overhead_s": 0.025490567869413613,
+    "decode_overhead_s": 0.0,
+    "prefill_quadratic_s": 3.183762086121867e-08,
+    "decode_context_s": 4.057988306430102e-08,
+    "decode_token_offset": 1
+  },
+  "validation_windows": 8,
+  "synthetic_seed_formula": "10000+training_seed*10000+episode",
+  "rates": [
+    0.6,
+    1.2,
+    1.8
+  ],
+  "synthetic_burst_multipliers": [
+    1,
+    2,
+    3
+  ],
+  "model": "Double DQN, 7-32-3 ReLU MLP, Huber, Adam, replay 50000, batch 64, update every 4 steps, target copy every 200 updates",
+  "feature_schema": [
+    "slack/SLO",
+    "estimated_service/SLO",
+    "log1p(input)/10",
+    "log1p(queue)/5",
+    "estimated_output/1000",
+    "now/horizon",
+    "defers/max_defers"
+  ],
+  "numpy_version": "2.3.5",
+  "processed_trace_sha256": "33837884ab785c5bdab544e504720d2e7a00a1b70f0b85f3226036703ca2a389",
+  "test_used_for_selection": false
+}

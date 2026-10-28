@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv*/
+models/
+data/raw/
+data/processed/
+results/dqn/
+results/heldout/
+results/reproduced*/
+results/gpu/reproduction*/
+*.zip

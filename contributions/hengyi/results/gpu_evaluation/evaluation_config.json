@@ -1,0 +1,110 @@
+{
+  "static_candidates": [
+    {
+      "factor": 0.5,
+      "validation_slo_attainment": 0.62744140625
+    },
+    {
+      "factor": 1.0,
+      "validation_slo_attainment": 0.61767578125
+    },
+    {
+      "factor": 1.5,
+      "validation_slo_attainment": 0.518310546875
+    },
+    {
+      "factor": 2.0,
+      "validation_slo_attainment": 0.0
+    },
+    {
+      "factor": 3.0,
+      "validation_slo_attainment": 0.0
+    }
+  ],
+  "selected_factor": 0.5,
+  "service_profile": {
+    "prefill_rate": null,
+    "decode_rate": 35.849389110100596,
+    "provenance": "measured RTX 5070 / Qwen2.5-0.5B-Instruct / torch 2.9.0+cu130 / transformers 4.57.1 / FP16 SDPA batch=1",
+    "prefill_overhead_s": 0.025490567869413613,
+    "decode_overhead_s": 0.0,
+    "prefill_quadratic_s": 3.183762086121867e-08,
+    "decode_context_s": 4.057988306430102e-08,
+    "decode_token_offset": 1
+  },
+  "estimated_output_tokens": 109.6070556640625,
+  "models": {
+    "dqn_seed17": "6dbf707695bb6907bfde16664ed04a396daca2e14e26b61a4f129eba7b4cfda8",
+    "dqn_seed27": "c15ac3258ac3a747d1b9e300904b2bdb8f23a4dd6615985580f992dc5462c1d3",
+    "dqn_seed7": "f7de3b8cad3224ddf70c01b40b59738b353fb1ff34e9676e6225ae64b56575ad"
+  },
+  "model_metadata": {
+    "dqn_seed17": {
+      "training_seed": 17,
+      "selected_episode": 60,
+      "validation_slo_attainment": 0.626708984375,
+      "estimated_output_tokens": 109.6070556640625,
+      "learning_rate": 0.001,
+      "gamma": 0.99,
+      "service_profile": {
+        "prefill_rate": null,
+        "decode_rate": 35.849389110100596,
+        "provenance": "measured RTX 5070 / Qwen2.5-0.5B-Instruct / torch 2.9.0+cu130 / transformers 4.57.1 / FP16 SDPA batch=1",
+        "prefill_overhead_s": 0.025490567869413613,
+        "decode_overhead_s": 0.0,
+        "prefill_quadratic_s": 3.183762086121867e-08,
+        "decode_context_s": 4.057988306430102e-08,
+        "decode_token_offset": 1
+      },
+      "reward": "success=1, late=-0.1-0.2*service/SLO, drop=-0.05, defer=-0.02*seconds, terminal=attainment",
+      "checkpoint_type": "inference weights only; optimizer/replay not saved",
+      "source_sha256": "46fc9480ef0b748ecb2b51d512ff08c196b031782cbe6f78e28044d768e86d5a"
+    },
+    "dqn_seed27": {
+      "training_seed": 27,
+      "selected_episode": 40,
+      "validation_slo_attainment": 0.62548828125,
+      "estimated_output_tokens": 109.6070556640625,
+      "learning_rate": 0.001,
+      "gamma": 0.99,
+      "service_profile": {
+        "prefill_rate": null,
+        "decode_rate": 35.849389110100596,
+        "provenance": "measured RTX 5070 / Qwen2.5-0.5B-Instruct / torch 2.9.0+cu130 / transformers 4.57.1 / FP16 SDPA batch=1",
+        "prefill_overhead_s": 0.025490567869413613,
+        "decode_overhead_s": 0.0,
+        "prefill_quadratic_s": 3.183762086121867e-08,
+        "decode_context_s": 4.057988306430102e-08,
+        "decode_token_offset": 1
+      },
+      "reward": "success=1, late=-0.1-0.2*service/SLO, drop=-0.05, defer=-0.02*seconds, terminal=attainment",
+      "checkpoint_type": "inference weights only; optimizer/replay not saved",
+      "source_sha256": "46fc9480ef0b748ecb2b51d512ff08c196b031782cbe6f78e28044d768e86d5a"
+    },
+    "dqn_seed7": {
+      "training_seed": 7,
+      "selected_episode": 40,
+      "validation_slo_attainment": 0.626708984375,
+      "estimated_output_tokens": 109.6070556640625,
+      "learning_rate": 0.001,
+      "gamma": 0.99,
+      "service_profile": {
+        "prefill_rate": null,
+        "decode_rate": 35.849389110100596,
+        "provenance": "measured RTX 5070 / Qwen2.5-0.5B-Instruct / torch 2.9.0+cu130 / transformers 4.57.1 / FP16 SDPA batch=1",
+        "prefill_overhead_s": 0.025490567869413613,
+        "decode_overhead_s": 0.0,
+        "prefill_quadratic_s": 3.183762086121867e-08,
+        "decode_context_s": 4.057988306430102e-08,
+        "decode_token_offset": 1
+      },
+      "reward": "success=1, late=-0.1-0.2*service/SLO, drop=-0.05, defer=-0.02*seconds, terminal=attainment",
+      "checkpoint_type": "inference weights only; optimizer/replay not saved",
+      "source_sha256": "46fc9480ef0b748ecb2b51d512ff08c196b031782cbe6f78e28044d768e86d5a"
+    }
+  },
+  "source_sha256": "46fc9480ef0b748ecb2b51d512ff08c196b031782cbe6f78e28044d768e86d5a",
+  "selection": "Only validation windows at rates 0.6 and 1.2; test never used for checkpoint/factor selection",
+  "evaluation_workloads": 128,
+  "policy_runs": 896
+}
