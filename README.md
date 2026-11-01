@@ -34,4 +34,4 @@ the data manifest, and code/data hashes are retained for reproducibility.
 
 ## Contributions
 
-- **[Hengyi Yin — GPU calibration and request-triage prototype](contributions/hengyi/)**: reproducible simulator/RL core, actual RTX 5070 measurements, calibrated timings, and a small real-GPU queue replay. Start with the [English contribution report](contributions/hengyi/REPORT.md).
+- **[Hengyi Yin — GPU calibration and request-triage prototype](contributions/hengyi/)**: reproducible simulator/RL core, actual RTX 5070 measurements, calibrated timings, and a small real-GPU queue replay. Start with the [contribution report](contributions/hengyi/REPORT.md).
