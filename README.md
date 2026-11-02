@@ -20,6 +20,19 @@ Run its tests without installing additional dependencies:
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
+Run an end-to-end comparison through the deterministic development executor:
+
+```bash
+python experiments/run_baselines.py --output-dir results/tables
+```
+
+This produces `baseline_requests.csv`, `baseline_summary.csv`, and
+`baseline_config.json`. The synthetic executor validates the integration path;
+it is not the high-fidelity simulator used for final project claims.
+
+For a hosted workflow, open
+[`notebooks/colab_baselines.ipynb`](notebooks/colab_baselines.ipynb) in Colab.
+
 ## Contributions
 
 - **[Hengyi Yin — GPU calibration and request-triage prototype](contributions/hengyi/)**: reproducible simulator/RL core, actual RTX 5070 measurements, calibrated timings, and a small real-GPU queue replay. Start with the [English contribution report](contributions/hengyi/REPORT.md).
