@@ -491,3 +491,24 @@ class TestAccounting:
     def test_summary(self):
         text = simulate([req(1)], FCFSCallback(), HW, P).summary()
         assert "SLO attainment" in text and "Wasted GPU time" in text
+
+
+# ---------------------------------------------------------------------------
+# Cross-branch package exports (src/llm_triage/)
+# ---------------------------------------------------------------------------
+
+class TestLLMTriagePackageExports:
+    def test_imports_from_llm_triage_simulation_and_service(self):
+        from llm_triage.service import ServiceProfile as SP
+        from llm_triage.simulation import (
+            FCFSCallback as FCFS,
+            SimulatorExecutor as Exec,
+            TriageKernel as Kernel,
+            simulate as sim,
+        )
+
+        assert SP is ServiceProfile
+        assert FCFS is FCFSCallback
+        assert Exec is SimulatorExecutor
+        assert Kernel is TriageKernel
+        assert sim is simulate
