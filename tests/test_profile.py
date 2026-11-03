@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from triage.profile import ServiceProfile
+from triage import FCFSCallback, HardwareConfig, Request, ServiceProfile, simulate
 
 HENGYI_PROFILE = (
     Path(__file__).resolve().parents[1] / "contributions/hengyi/profiles/rtx5070_qwen05b.json"
@@ -37,6 +37,12 @@ class TestCalibration:
         sp = json.loads(HENGYI_PROFILE.read_text())["service_profile"]
         p = ServiceProfile.from_json(HENGYI_PROFILE)
         assert p.isolated_service_time(inp, out) == pytest.approx(hengyi_service_s(sp, inp, out))
+
+    @pytest.mark.parametrize("inp,out", [(64, 1), (256, 20)])
+    def test_engine_single_request_matches_isolated_time(self, inp, out):
+        p = ServiceProfile()
+        r = simulate([Request(1, 0.0, inp, out, 100.0)], FCFSCallback(), HardwareConfig(), p)
+        assert r.requests[0].completion_time == pytest.approx(p.isolated_service_time(inp, out))
 
     def test_rejects_poor_fit(self, tmp_path):
         f = tmp_path / "bad.json"
