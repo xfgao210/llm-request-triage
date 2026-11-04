@@ -18,7 +18,7 @@ class FCFSSelector:
     def select(self, snapshot: SchedulerSnapshot) -> CandidateView:
         return min(
             _require_candidates(snapshot),
-            key=lambda candidate: (candidate.arrival_time_s, candidate.request_id),
+            key=lambda candidate: candidate.arrival_time_s,
         )
 
 

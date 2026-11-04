@@ -27,6 +27,8 @@ Batch contention is an uncalibrated assumption; these are simulation results.
 
 See [integration instructions](docs/week1-integration.md) and the
 [retained results](results/week1-integrated/REPORT.md).
+An additional [artificial KV stress scenario](results/week1-integrated-kv-stress/REPORT.md)
+exercises capacity pressure and preemption on the same validation cohort.
 
 ## Components
 

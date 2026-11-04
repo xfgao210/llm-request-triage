@@ -2,6 +2,10 @@
 
 Owner: Hengyi Yin. Delivered November 1, 2026, for the Oct 29–Nov 4 milestone.
 
+This is the original reference-simulator handoff. For the subsequent shared
+simulator/metrics integration and updated contracts, see
+[Week 1 integration](week1-integration.md).
+
 ## Delivered scope
 
 - Shared package with canonical environment-truth and policy-visible types.

@@ -109,22 +109,21 @@ class Week1Tests(unittest.TestCase):
                 replay_window(invalid)
 
     def candidate(self, identity, arrival, estimate=1):
-        return CandidateView(identity, arrival, 1, estimate, estimate, 10)
+        return CandidateView(identity, arrival, 1, estimate, 10, estimate)
 
     def test_fcfs_earliest_arrival_stable_ties_and_feasibility(self):
         scheduler = FCFSScheduler()
         snapshot = SchedulerSnapshot(3, (self.candidate("later", 2), self.candidate("10", 1, 100),
-                                        self.candidate("2", 1, .1)), ResourceView())
+                                        self.candidate("2", 1, .1)), ResourceView(can_admit=True))
         self.assertEqual(scheduler.decide(snapshot).request_id, "10")
         self.assertEqual(scheduler.decide(snapshot).action, Action.ADMIT)
-        blocked = replace(snapshot, resources=ResourceView(active_batch_size=1, admission_available=False))
+        blocked = replace(snapshot, resources=ResourceView(active_batch_size=1, can_admit=False))
         self.assertEqual(scheduler.decide(blocked).action, Action.DEFER)
         self.assertEqual(scheduler.decide(blocked).request_id, "10")
         # Batching feasibility is supplied by the future kernel, not guessed by FCFS.
-        batching = replace(snapshot, resources=ResourceView(active_batch_size=1, admission_available=True))
+        batching = replace(snapshot, resources=ResourceView(active_batch_size=1, can_admit=True))
         self.assertEqual(scheduler.decide(batching).action, Action.ADMIT)
-        with self.assertRaises(ValueError):
-            scheduler.decide(replace(snapshot, candidates=()))
+        self.assertIsNone(scheduler.decide(replace(snapshot, candidates=())))
 
     def test_hidden_output_not_in_snapshot_contract(self):
         for cls in (CandidateView, ResourceView, SchedulerSnapshot):

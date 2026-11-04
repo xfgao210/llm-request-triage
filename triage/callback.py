@@ -18,9 +18,10 @@ Two scheduling interfaces are supported directly:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Mapping, Protocol, Tuple, Union, runtime_checkable
+from dataclasses import dataclass
+from typing import Protocol, Tuple, Union, runtime_checkable
+
+from llm_triage.metrics.schemas import EventType, LifecycleEvent
 
 from triage.request import Action, RequestState
 
@@ -206,28 +207,6 @@ SchedulerSnapshot = SimState
 # ---------------------------------------------------------------------------
 # Lifecycle events (TECH_DESIGN.md §7.5)
 # ---------------------------------------------------------------------------
-
-class EventType(str, Enum):
-    """Request lifecycle events emitted by the simulator."""
-
-    ARRIVAL = "arrival"
-    DECISION = "decision"
-    SERVICE_START = "service_start"
-    FIRST_TOKEN = "first_token"
-    COMPLETION = "completion"
-    DROP = "drop"
-    EPISODE_END = "episode_end"
-
-
-@dataclass(frozen=True)
-class LifecycleEvent:
-    """A timestamped lifecycle fact emitted by the simulation kernel."""
-
-    event_type: EventType
-    timestamp_s: float
-    request_id: str | None = None
-    details: Mapping[str, object] = field(default_factory=dict)
-
 
 @dataclass(frozen=True)
 class Transition:

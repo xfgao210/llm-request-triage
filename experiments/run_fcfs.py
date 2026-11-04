@@ -31,12 +31,14 @@ def run_reference(replay, *, prefill_rate=2000.0, decode_rate=400.0, estimated_o
 
     def callback(observation):
         request = requests[observation.request_id]
-        candidate = CandidateView(request.request_id, request.arrival_time_s, observation.input_tokens,
-                                  observation.estimated_output_tokens, observation.estimated_service_s,
-                                  observation.now + observation.slack)
+        candidate = CandidateView(request_id=request.request_id, arrival_time_s=request.arrival_time_s,
+                                  input_tokens=observation.input_tokens,
+                                  estimated_output_tokens=observation.estimated_output_tokens,
+                                  estimated_service_s=observation.estimated_service_s,
+                                  deadline_s=observation.now + observation.slack)
         snapshot = SchedulerSnapshot(observation.now, (candidate,),
                                      ResourceView(active_batch_size=int(observation.server_busy),
-                                                  admission_available=not observation.server_busy))
+                                                  can_admit=not observation.server_busy))
         return reference.Action(scheduler.decide(snapshot).action.value)
 
     records, trace, summary = reference.simulate(

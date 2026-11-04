@@ -1,7 +1,9 @@
 # Simulator Integration Contract
 
 The evaluation and baseline code is independent of a particular simulator.
-Vikas's simulator needs a small adapter implementing `PolicyExecutor`.
+Vikas's simulator provides `triage.SimulatorExecutor`, implementing `PolicyExecutor`.
+The integrated BurstGPT entry point is `experiments/run_burstgpt.py`; see
+[Week 1 integration](week1-integration.md) for the shared event schema and timing fixes.
 
 ## Inputs to the simulator
 
@@ -43,7 +45,7 @@ measurement window, and random seed must be restored before every policy run.
 ## Adapter shape
 
 ```python
-class SimulatorExecutor:
+class ExampleExecutor:
     def __init__(self, requests, simulation_config):
         self.requests = requests
         self.simulation_config = simulation_config

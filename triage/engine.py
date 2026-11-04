@@ -402,13 +402,14 @@ class TriageKernel:
         self,
         event_type: EventType,
         request_id: Union[int, str, None] = None,
+        *, timestamp_s: Optional[float] = None,
         **details: object,
     ) -> None:
         str_id = None if request_id is None else str(request_id)
         self._events.append(
             LifecycleEvent(
                 event_type=event_type,
-                timestamp_s=self.now,
+                timestamp_s=self.now if timestamp_s is None else timestamp_s,
                 request_id=str_id,
                 details=details,
             )
@@ -426,6 +427,7 @@ class TriageKernel:
             self._emit(
                 EventType.ARRIVAL,
                 req.request_id,
+                timestamp_s=req.arrival_time,
                 deadline_s=req.slo_deadline,
                 input_tokens=req.input_tokens,
                 queue_length=len(self.queue) + len(self._preempted_queue),
@@ -604,6 +606,8 @@ class TriageKernel:
         prompts = [r.input_tokens for r in batch]
         dur = self.profile.prefill_iteration_time(prompts)
         self.now += dur
+        # Preserve real arrival times before emitting iteration-end events.
+        self._absorb_arrivals()
         total = sum(prompts)
         for r in batch:
             r.gpu_time_s += dur * r.input_tokens / total
@@ -678,6 +682,7 @@ class TriageKernel:
         contexts = [r.context_tokens for r in self.running]
         dur = self.profile.decode_iteration_time(contexts)
         self.now += dur
+        self._absorb_arrivals()
         share = dur / len(self.running)
         finished: List[Request] = []
         for r in self.running:
@@ -743,13 +748,13 @@ class SimulatorExecutor:
         self.expire_overdue_in_queue = expire_overdue_in_queue
         self.estimated_output_tokens = estimated_output_tokens
         self.service_estimator = service_estimator
+        self.results: Dict[str, SimResult] = {}
 
     def run(
         self,
         policy_name: str,
         scheduler: SchedulerCallback,
     ) -> Iterable[LifecycleEvent]:
-        del policy_name
         res = simulate(
             self.requests,
             scheduler,
@@ -762,6 +767,7 @@ class SimulatorExecutor:
             service_estimator=self.service_estimator,
             record_iterations=False,
         )
+        self.results[policy_name] = res
         return res.events
 
 
