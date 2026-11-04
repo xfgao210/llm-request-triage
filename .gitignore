@@ -5,6 +5,8 @@ __pycache__/
 .pytest_cache/
 build/
 dist/
+tmp/
 /data/raw/
 /data/processed/
 /results/runs/
+/results/colab_synthetic/

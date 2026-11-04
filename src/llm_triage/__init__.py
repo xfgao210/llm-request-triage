@@ -1,1 +1,2 @@
-"""Shared implementation of the team's request-triage interfaces."""
+"""Shared implementation for SLO-aware LLM request triage."""
+
