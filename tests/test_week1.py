@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from llm_triage.workload.burstgpt import (TraceRow, acquire, chronological_split, load_windows,
                                         parse_trace, prepare, select_windows)
 from llm_triage.workload.transforms import replay_window
+from experiments.run_burstgpt import run_suite
 
 
 class Week1Tests(unittest.TestCase):
@@ -143,6 +144,26 @@ class Week1Tests(unittest.TestCase):
             csv.DictWriter(stream, fieldnames=list(rows[0])).writerow(rows[0])
         with self.assertRaisesRegex(ValueError, "reuse"):
             load_windows(csv_path)
+        config = {
+            "split": "validation",
+            "target_rps": [1.0],
+            "slo_s": 2.0,
+            "hardware": {
+                "max_batch_size": 2,
+                "kv_block_size": 16,
+                "kv_total_blocks": 32,
+            },
+            "defer_retry_s": 0.01,
+            "max_defers": 64,
+            "expire_overdue_in_queue": False,
+        }
+        with self.assertRaisesRegex(ValueError, "Prepared windows differ"):
+            run_suite(
+                config,
+                data / "processed",
+                self.folder / "runs",
+                self.folder / "summary",
+            )
 
 
 if __name__ == "__main__":

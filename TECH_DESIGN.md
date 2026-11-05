@@ -1,7 +1,7 @@
 # Technical Design: SLO-Aware LLM Request Triage
 
 **Status:** Living design  
-**Last updated:** 2026-11-01  
+**Last updated:** 2026-11-04
 **Owners:** Hengyi, Xiaofei, Vikas
 
 ## 1. Document purpose
@@ -294,56 +294,67 @@ The following interfaces describe semantics, not necessarily final field names.
 ### 7.1 Environment truth
 
 ```python
-@dataclass(frozen=True)
+@dataclass
 class Request:
-    request_id: str
-    arrival_time_s: float
+    request_id: int | str
+    arrival_time: float
     input_tokens: int
-    true_output_tokens: int
-    deadline_s: float
+    output_tokens: int
+    slo_deadline: float
+    # Simulator-owned lifecycle state follows.
 ```
 
-`true_output_tokens` is accessible only to the workload, kernel, and execution backend.
+Compatibility properties expose `arrival_time_s`, `true_output_tokens`, and
+`deadline_s`. Ground-truth output length is accessible only to the workload,
+kernel, and execution backend; it is never included in `RequestView`.
 
 ### 7.2 Policy-visible state
 
 ```python
 @dataclass(frozen=True)
-class CandidateView:
-    request_id: str
-    arrival_time_s: float
+class RequestView:
+    request_id: int | str
+    arrival_time: float
     input_tokens: int
+    slo_deadline: float
+    slo_slack: float
+    time_in_queue: float
+    state: RequestState
+    tokens_generated: int
+    defer_count: int
+    preemption_count: int
     estimated_output_tokens: float
     estimated_service_s: float
-    deadline_s: float
+
+CandidateView = RequestView
 
 @dataclass(frozen=True)
 class ResourceView:
+    can_admit: bool
     active_batch_size: int
-    kv_cache_available: float
+    kv_cache_available_tokens: int | None
     prefill_utilization: float
     decode_utilization: float
 
 @dataclass(frozen=True)
-class SchedulerSnapshot:
-    now_s: float
-    candidates: tuple[CandidateView, ...]
-    resources: ResourceView
+class SimState:
+    now: float
+    candidate: RequestView
+    queue_requests: tuple[RequestView, ...]
+    active_requests: tuple[RequestView, ...]
+    # Additional queue, resource, and episode counters are omitted here.
+
+    def candidate_fits(self, view: RequestView | None = None) -> bool: ...
+
+SchedulerSnapshot = SimState
 ```
+
+Compatibility properties expose `now_s`, `candidates`, and `resources`. New
+policies should use `candidate_fits()` when checking a particular request.
 
 ### 7.3 Scheduling contracts
 
 ```python
-class CandidateSelector(Protocol):
-    def select(self, snapshot: SchedulerSnapshot) -> str: ...
-
-class TriagePolicy(Protocol):
-    def act(
-        self,
-        candidate: CandidateView,
-        snapshot: SchedulerSnapshot,
-    ) -> "Action": ...
-
 class Action(str, Enum):
     ADMIT = "admit"
     DEFER = "defer"
@@ -351,19 +362,28 @@ class Action(str, Enum):
 
 @dataclass(frozen=True)
 class Decision:
-    request_id: str
+    request_id: int | str
     action: Action
+
+@runtime_checkable
+class SchedulerCallback(Protocol):
+    def decide(
+        self,
+        state: SimState,
+    ) -> Action | Decision | None: ...
 ```
 
-The orchestration layer may expose a combined `Scheduler.decide(snapshot) -> Decision` convenience interface.
+Returning an `Action` applies it to `state.candidate`; returning a `Decision`
+may identify any eligible request. A policy may additionally implement
+`priority(view: RequestView)` to control which request becomes the candidate.
 
 ### 7.4 Kernel and environment contracts
 
 ```python
 class TriageKernel(Protocol):
-    def reset(self, requests: Sequence[Request], config: RunConfig) -> None: ...
+    def reset(self, requests: Sequence[Request]) -> SchedulerSnapshot | None: ...
     def snapshot(self) -> SchedulerSnapshot: ...
-    def apply(self, decision: Decision) -> Transition: ...
+    def apply(self, decision: Action | Decision) -> Transition: ...
     def is_terminal(self) -> bool: ...
     def events(self) -> Iterable[LifecycleEvent]: ...
 

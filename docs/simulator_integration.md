@@ -64,10 +64,17 @@ Then execute all baselines through one adapter:
 ```python
 from llm_triage.evaluation import EvaluationConfig, evaluate_policy_matrix
 from llm_triage.scheduling import baseline_schedulers
+from llm_triage.simulation import HardwareConfig, ServiceProfile, SimulatorExecutor
+
+executor = SimulatorExecutor(
+    requests,
+    hardware=HardwareConfig(),
+    profile=ServiceProfile(),
+)
 
 results = evaluate_policy_matrix(
     baseline_schedulers(),
-    SimulatorExecutor(requests, simulation_config),
+    executor,
     EvaluationConfig(measurement_window_s=120.0),
 )
 ```
