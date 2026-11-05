@@ -1,7 +1,52 @@
-# llm_request_triage
+# SLO-aware LLM Request Triage
 
-COMS E6998-007 project: SLO-aware LLM request triage.
+COMS E6998-007 project. Shared BurstGPT ingestion, scheduling, iteration-level
+simulation, and lifecycle-based evaluation.
+
+## Run
+
+Python 3.11+; runtime uses only the standard library. Run from the repository root:
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest -q
+python scripts/prepare_burstgpt.py
+python experiments/run_burstgpt.py
+```
+
+Trace preparation downloads the pinned ~51 MB BurstGPT CSV and license, verifies
+its SHA256, and creates chronological train/validation/test windows. Use
+`--source /path/to/BurstGPT_1.csv` for a verified local copy. Raw/processed traces
+and verbose run logs are ignored by Git.
+
+The integrated baseline command runs FCFS, length-aware, and static SLO-aware
+policies on the same validation windows through `SimulatorExecutor`, collecting
+TTFT, completion SLO attainment, throughput, goodput, drops, and unfinished work.
+It uses the RTX 5070/Qwen service profile and simulated paged KV-cache constraints.
+Batch contention is an uncalibrated assumption; these are simulation results.
+
+See [integration instructions](docs/week1-integration.md) and the
+[retained results](results/week1-integrated/REPORT.md).
+An additional [artificial KV stress scenario](results/week1-integrated-kv-stress/REPORT.md)
+exercises capacity pressure and preemption on the same validation cohort.
+
+## Components
+
+- [Workload pipeline and original Week 1 handoff](docs/week1-hengyi.md).
+- [Simulator architecture](docs/simulator.md): continuous batching, paged
+  KV-cache allocation, recompute preemption, and a steppable kernel.
+- [Metrics](docs/metrics.md) and [simulator integration contract](docs/simulator_integration.md).
+- [Technical design](TECH_DESIGN.md).
+
+The original CPU reference baseline is still runnable with
+`python experiments/run_fcfs.py`; its assumed-rate results remain in
+`results/week1/`. The development-only synthetic executor is available via
+`python experiments/run_baselines.py` and the
+[Colab notebook](notebooks/colab_baselines.ipynb).
 
 ## Contributions
 
-- **[Hengyi Yin — GPU calibration and request-triage prototype](contributions/hengyi/)**: reproducible simulator/RL core, actual RTX 5070 measurements, calibrated timings, and a small real-GPU queue replay. Start with the [contribution report](contributions/hengyi/REPORT.md).
+- Vikas Chelur: core simulator architecture and resource management.
+- Xiaofei Gao: evaluation engine, advanced baseline schedulers, and visualization workflow.
+- Hengyi Yin: BurstGPT pipeline, FCFS, GPU calibration, and integration/reproduction.
+  See the [initial contribution report](contributions/hengyi/REPORT.md).

@@ -1,0 +1,7 @@
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+# CSV byte identity is part of the retained provenance.
+*.csv -text whitespace=cr-at-eol

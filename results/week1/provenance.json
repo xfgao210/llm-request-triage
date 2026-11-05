@@ -1,0 +1,43 @@
+{
+  "resolved_config": {
+    "split": "validation",
+    "target_rps": [
+      0.6,
+      1.2,
+      2.4
+    ],
+    "slo_s": 5.0,
+    "prefill_tokens_per_s": 2000.0,
+    "decode_tokens_per_s": 400.0
+  },
+  "backend": "contributions/hengyi/triage_sim.py (single serial worker)",
+  "timing": "assumed linear token rates; CPU simulation, not GPU execution",
+  "metric_semantics": {
+    "slo": "completion <= deadline; all arrivals in denominator",
+    "throughput": "completions <= horizon / horizon; drain reported separately",
+    "latency": "completed-request latency including queue wait",
+    "ttft": "not emitted by the reference simulator"
+  },
+  "data_source": {
+    "source_url": "https://raw.githubusercontent.com/HPMLL/BurstGPT/d895a53bb7b8ec137d0d2fe203b335835a78c10a/data/BurstGPT_1.csv",
+    "revision": "d895a53bb7b8ec137d0d2fe203b335835a78c10a",
+    "source_sha256": "46fc9480ef0b748ecb2b51d512ff08c196b031782cbe6f78e28044d768e86d5a",
+    "selected_sha256": "d76a69b0fe6f21b6d9f975631d78a85c03cf2244554252605f11a6d6dc25e44c"
+  },
+  "manifest_sha256": "a90bf7724176790cb6847315e4c4b3a4db003bc9eab6a090f756990b08232977",
+  "code_sha256": {
+    "experiments/run_fcfs.py": "7f77e5f1768bf62bdf7e8a6082a567dc392fe0cc82acb2458307615c4bdd8920",
+    "contributions/hengyi/triage_sim.py": "969eaf810a86e6ea2f14d8fa5b53fca54075e95459434b0b0571e962ae59c860",
+    "src/llm_triage/__init__.py": "e05ced378a94fc37b3be1e89763ef16f47488e75c8511ef1be1f7b575ef6e832",
+    "src/llm_triage/scheduling/__init__.py": "6a216f1d44a5ff26d009acd5d52db419addc5eb76d2e557b383c5a5e2b1ee88d",
+    "src/llm_triage/scheduling/base.py": "b385ff5d057f743e7554a205a8db7d2592fddf67b385a96cefa6de9f94edc590",
+    "src/llm_triage/scheduling/fcfs.py": "7ace92c671086d40c9f98cbba7876d31ff98062eeaa38ef62293f69cfbd26a09",
+    "src/llm_triage/types.py": "aa5e5da617f8d0a01180d7fc7945c3afbccdfcf1e06076c1b9e4ad5c3dd19897",
+    "src/llm_triage/workload/__init__.py": "e2c9799b8ef03bf8fe7f73012627d70f12a78e7cf9819a0ca54eddd52785ec71",
+    "src/llm_triage/workload/burstgpt.py": "2ce9270019e6fafe86760097db743dcf7159ff77d5359648241eff722a0796b7",
+    "src/llm_triage/workload/transforms.py": "5cbb488319d1aec4660cf44081754a273b1284a9c62fa62d26b96f022b51776a"
+  },
+  "windows_evaluated": 8,
+  "policy_runs": 24,
+  "estimated_output_tokens_train_mean": 109.6070556640625
+}

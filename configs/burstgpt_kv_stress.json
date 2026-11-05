@@ -1,0 +1,14 @@
+{
+  "split": "validation",
+  "target_rps": [2.4],
+  "slo_s": 5.0,
+  "hardware": {
+    "gpu_name": "artificial-kv-stress-4096-tokens",
+    "max_batch_size": 4,
+    "kv_block_size": 16,
+    "kv_total_blocks": 256
+  },
+  "defer_retry_s": 0.01,
+  "max_defers": 64,
+  "expire_overdue_in_queue": false
+}

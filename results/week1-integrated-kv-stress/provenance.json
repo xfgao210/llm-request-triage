@@ -1,0 +1,81 @@
+{
+  "code_sha256": {
+    "experiments/run_burstgpt.py": "7fdab7285b5c6ed9944f0ccc94aa4bbb4b5695ebc09c44f4c64d674909fd1c9e",
+    "src/llm_triage/__init__.py": "ca85e1fb437b740f695963a8b5f27e1dfddca04a75e9717d0266d032058736dd",
+    "src/llm_triage/evaluation/__init__.py": "24e1b64b324afb2e463c8a3dd579088d07acf760af31e111546fecbb3ea8c005",
+    "src/llm_triage/evaluation/reporting.py": "61c3cab3b9002f80aa03657d2689e64ecf3dbf28f0d211eeb29433a46eb394f3",
+    "src/llm_triage/evaluation/runner.py": "19b9c8262238980cb2e23a588f7469fc182acfe3257a0e8a40e64f6894827ca4",
+    "src/llm_triage/evaluation/synthetic.py": "a80e052f6a37b1b3c55c437c0a46cc2b6b9ac6ab378a91d60e99ee1b7edb9c0e",
+    "src/llm_triage/metrics/__init__.py": "06f105040442343edff152cadbe6e85d9f21a72db8f595e7c01084d8783d0a09",
+    "src/llm_triage/metrics/collector.py": "39ba27f272d4469daf5390e64e77e7860211bcace075f03ed056051bbe82159f",
+    "src/llm_triage/metrics/schemas.py": "62c2a09a112b4a7aefd37ea685d42af9e673b7decf5905a8886e2f318147253e",
+    "src/llm_triage/metrics/summary.py": "88e4e61e2889bb1db5afe8b0a708b6507e49bdbab0361bf42a72a76944268d48",
+    "src/llm_triage/scheduling/__init__.py": "70abe23187b35f7da1ca28101bf5acdaec5f8eae53991faeb8c265a3bf501eeb",
+    "src/llm_triage/scheduling/base.py": "90ef88178b60fc81cdf560dd18e774070b2feadd55e46ad03eef692724f0868b",
+    "src/llm_triage/scheduling/baselines.py": "7dc0e1d03863637a584a822663bb3283ff9e202c2e3fa62bde4e0b97e0dfbeb6",
+    "src/llm_triage/scheduling/fcfs.py": "8171e61b6b493fc39112bd55ba5eb61304ca31073f38a4f0162fb0d0a54ef9c0",
+    "src/llm_triage/scheduling/length_aware.py": "16869fd67ec6091f60d6bd9084f3bf11e77cf3467c8591c78938f1530c438411",
+    "src/llm_triage/scheduling/selectors.py": "d7dc9ff4a2e9420a3e5ab76c2a3f45d481de82b828c122c51a6cfdbcfa24f3cd",
+    "src/llm_triage/scheduling/slo_aware.py": "8ad10db52b5d487bae585cf05c3ce15e84f70afa25d0cee1f4f7fa6cbf212c09",
+    "src/llm_triage/service/__init__.py": "f90a292a9c23538fa8aae9ec94f06019627d3bb06058e091613a1fe441723c0f",
+    "src/llm_triage/simulation/__init__.py": "0c8b34ef54e963c6a47321ceb48620a724edf5631e9e1ba0be4471677bf10f5e",
+    "src/llm_triage/types.py": "64fbc7faa8972d8c31d4adebbab31bda805427c2ea68435344633c5115b2ad72",
+    "src/llm_triage/workload/__init__.py": "e2c9799b8ef03bf8fe7f73012627d70f12a78e7cf9819a0ca54eddd52785ec71",
+    "src/llm_triage/workload/burstgpt.py": "2ce9270019e6fafe86760097db743dcf7159ff77d5359648241eff722a0796b7",
+    "src/llm_triage/workload/transforms.py": "5cbb488319d1aec4660cf44081754a273b1284a9c62fa62d26b96f022b51776a",
+    "triage/__init__.py": "8e64196a86bbd796a9d2d27c33d1c0029ba554fdd50cf5ed1b5c665c42b40161",
+    "triage/baselines.py": "6b94fc56c02246b82d9e51f2dfdd019c51480fc0a5b484c1a838521189aa7c51",
+    "triage/callback.py": "81e16eea7af96f738ac139c8d1c1914ccffcf6a57cdded39713a9f37b4dde51e",
+    "triage/engine.py": "e65862d57bd3adc44642aa551358c4ac1d02640ac4cdac20c5f701c003b649b8",
+    "triage/hardware.py": "030d3a64a17d2a320c29d73c46b1493924be61b7abd9f85e87ad088bb21faa88",
+    "triage/profile.py": "7089f82af0d933e594640e4ee985524b52fffbb01b0ebab4f989480ccbc6003d",
+    "triage/request.py": "7a60aee1f998f1fe0385b8c9aa416756813d26d77ffc18ad4415f7e1bda60ccc"
+  },
+  "config": {
+    "defer_retry_s": 0.01,
+    "expire_overdue_in_queue": false,
+    "hardware": {
+      "gpu_name": "artificial-kv-stress-4096-tokens",
+      "kv_block_size": 16,
+      "kv_total_blocks": 256,
+      "max_batch_size": 4
+    },
+    "max_defers": 64,
+    "slo_s": 5.0,
+    "split": "validation",
+    "target_rps": [
+      2.4
+    ]
+  },
+  "estimated_output_tokens_train_mean": 109.6070556640625,
+  "hardware": {
+    "gpu_name": "artificial-kv-stress-4096-tokens",
+    "kv_block_size": 16,
+    "kv_total_blocks": 256,
+    "max_batch_size": 4
+  },
+  "limitations": [
+    "Simulation, not real GPU inference",
+    "Batch=1 timing calibration; batch contention is assumed",
+    "Selected validation windows, not independent random seeds",
+    "Wall-clock scheduler overhead varies between repetitions",
+    "Service residency time in metrics is not attributed GPU compute; see GPU diagnostics"
+  ],
+  "manifest_sha256": "a90bf7724176790cb6847315e4c4b3a4db003bc9eab6a090f756990b08232977",
+  "measured_domain_fraction": 0.81982421875,
+  "policy_runs": 24,
+  "request_executions": 6144,
+  "service_profile": {
+    "contention_factor": 0.5,
+    "contention_ref_batch": 32,
+    "decode_context_s": 4.057988306430102e-08,
+    "decode_rate": 35.849389110100596,
+    "default_estimated_output_tokens": 144.0,
+    "prefill_overhead_s": 0.025490567869413613,
+    "prefill_quadratic_s": 3.183762086121867e-08,
+    "prefill_rate": null,
+    "provenance": "measured RTX 5070 / Qwen2.5-0.5B batch=1 + assumed batch contention"
+  },
+  "unique_source_requests": 2048,
+  "window_sha256": "d76a69b0fe6f21b6d9f975631d78a85c03cf2244554252605f11a6d6dc25e44c"
+}

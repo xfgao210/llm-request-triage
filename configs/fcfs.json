@@ -1,0 +1,7 @@
+{
+  "split": "validation",
+  "target_rps": [0.6, 1.2, 2.4],
+  "slo_s": 5.0,
+  "prefill_tokens_per_s": 2000.0,
+  "decode_tokens_per_s": 400.0
+}
