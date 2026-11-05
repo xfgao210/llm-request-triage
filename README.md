@@ -48,6 +48,14 @@ smoke workloads now run through the shared simulator. Use
 `python experiments/run_baselines.py` or the
 [Colab notebook](notebooks/colab_baselines.ipynb) for a small local example.
 
+## Reward shaping
+
+The shared asymmetric reward model under `src/llm_triage/rl/` rewards on-time
+completion, penalizes late computation and proactive drops at different
+magnitudes, charges for deferral, and includes terminal completion and
+drop-all guardrails. The formula, initial untuned weights, and information
+boundary are documented in [`docs/reward_design.md`](docs/reward_design.md).
+
 ## Contributions
 
 - Vikas Chelur: core simulator architecture, resource management, and Week 2 RL environment wrapper.
