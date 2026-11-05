@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from triage import FCFSCallback, HardwareConfig, Request, ServiceProfile, simulate
+from llm_triage.simulation import FCFSCallback, HardwareConfig, Request, ServiceProfile, simulate
 
 HENGYI_PROFILE = (
     Path(__file__).resolve().parents[1] / "contributions/hengyi/profiles/rtx5070_qwen05b.json"

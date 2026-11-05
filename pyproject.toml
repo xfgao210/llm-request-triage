@@ -13,9 +13,9 @@ dependencies = []
 dev = ["pytest>=7.0"]
 
 [tool.setuptools.packages.find]
-where = ["src", "."]
-include = ["llm_triage*", "triage*"]
+where = ["src"]
+include = ["llm_triage*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "."]
+pythonpath = ["src"]

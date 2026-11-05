@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 import math
 
-from llm_triage.types import Request
+from llm_triage.simulation import Request
 
 
 @dataclass(frozen=True)

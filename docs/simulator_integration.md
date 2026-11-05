@@ -1,7 +1,8 @@
 # Simulator Integration Contract
 
 The evaluation and baseline code is independent of a particular simulator.
-Vikas's simulator provides `triage.SimulatorExecutor`, implementing `PolicyExecutor`.
+The shared implementation provides `llm_triage.simulation.SimulatorExecutor`,
+implementing `PolicyExecutor`.
 The integrated BurstGPT entry point is `experiments/run_burstgpt.py`; see
 [Week 1 integration](week1-integration.md) for the shared event schema and timing fixes.
 
@@ -73,4 +74,3 @@ results = evaluate_policy_matrix(
 
 Use `write_evaluation_artifacts` to generate the request CSV, summary CSV, and
 resolved configuration JSON.
-

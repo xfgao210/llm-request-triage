@@ -3,125 +3,93 @@ from __future__ import annotations
 from dataclasses import fields
 import unittest
 
+from llm_triage import scheduling
 from llm_triage.scheduling import (
-    Action,
-    CandidateView,
     FCFSScheduler,
     LengthAwareScheduler,
-    ResourceView,
-    SchedulerSnapshot,
     StaticSLOAwareScheduler,
+    baseline_schedulers,
+)
+from llm_triage.simulation import (
+    Action,
+    CandidateView,
+    HardwareConfig,
+    Request,
+    RequestState,
+    SchedulerSnapshot,
+    ServiceProfile,
+    simulate,
 )
 
 
-def _candidate(
-    request_id: str,
-    *,
-    arrival: float,
-    service: float,
-    deadline: float,
-) -> CandidateView:
-    return CandidateView(
-        request_id=request_id,
-        arrival_time_s=arrival,
-        input_tokens=100,
-        estimated_output_tokens=50.0,
-        deadline_s=deadline,
-        estimated_service_s=service,
-    )
+PROFILE = ServiceProfile(
+    prefill_overhead_s=0.001,
+    prefill_rate=None,
+    prefill_quadratic_s=0.000001,
+    decode_rate=1000,
+    decode_context_s=0,
+    contention_factor=0,
+    default_estimated_output_tokens=1,
+)
+HARDWARE = HardwareConfig(max_batch_size=1, kv_block_size=16, kv_total_blocks=1024)
 
 
-def _snapshot(*candidates: CandidateView, can_admit: bool = True) -> SchedulerSnapshot:
-    return SchedulerSnapshot(
-        now_s=3.0,
-        candidates=tuple(candidates),
-        resources=ResourceView(can_admit=can_admit),
-    )
+def _request(request_id: str, input_tokens: int, deadline: float = 10.0) -> Request:
+    return Request(request_id, 0.0, input_tokens, 1, deadline)
 
 
 class SchedulingTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.first = _candidate("first", arrival=0.0, service=5.0, deadline=12.0)
-        self.short = _candidate("short", arrival=1.0, service=1.0, deadline=12.0)
-        self.urgent = _candidate("urgent", arrival=2.0, service=3.0, deadline=5.0)
+    def test_scheduling_reexports_the_simulator_contract(self) -> None:
+        self.assertIs(scheduling.Action, Action)
+        self.assertIs(scheduling.CandidateView, CandidateView)
+        self.assertIs(scheduling.SchedulerSnapshot, SchedulerSnapshot)
 
-    def test_fcfs_selects_earliest_arrival(self) -> None:
-        decision = FCFSScheduler().decide(
-            _snapshot(self.short, self.urgent, self.first)
+    def test_fcfs_preserves_enqueue_order(self) -> None:
+        result = simulate(
+            [_request("first", 100), _request("second", 10)],
+            FCFSScheduler(),
+            HARDWARE,
+            PROFILE,
+            estimated_output_tokens=1,
+        )
+        order = sorted(result.requests, key=lambda request: request.admit_time)
+        self.assertEqual([request.request_id for request in order], ["first", "second"])
+
+    def test_length_aware_prioritizes_shortest_estimated_service(self) -> None:
+        result = simulate(
+            [_request("long", 100), _request("short", 10), _request("middle", 50)],
+            LengthAwareScheduler(),
+            HARDWARE,
+            PROFILE,
+            estimated_output_tokens=1,
+        )
+        order = sorted(result.requests, key=lambda request: request.admit_time)
+        self.assertEqual(
+            [request.request_id for request in order],
+            ["short", "middle", "long"],
         )
 
-        self.assertEqual(decision.request_id, "first")
-        self.assertIs(decision.action, Action.ADMIT)
-
-    def test_length_aware_selects_shortest_estimated_service(self) -> None:
-        decision = LengthAwareScheduler().decide(
-            _snapshot(self.first, self.short, self.urgent)
+    def test_slo_aware_drops_estimated_infeasible_request(self) -> None:
+        result = simulate(
+            [_request("urgent", 1000, deadline=0.01), _request("feasible", 10)],
+            StaticSLOAwareScheduler(),
+            HARDWARE,
+            PROFILE,
+            estimated_output_tokens=1,
         )
+        by_id = result.by_id()
+        self.assertIs(by_id["urgent"].state, RequestState.DROPPED)
+        self.assertIs(by_id["feasible"].state, RequestState.COMPLETED)
 
-        self.assertEqual(decision.request_id, "short")
-        self.assertIs(decision.action, Action.ADMIT)
-
-    def test_length_aware_defers_when_resources_are_unavailable(self) -> None:
-        decision = LengthAwareScheduler().decide(
-            _snapshot(self.first, self.short, can_admit=False)
+    def test_baseline_registry_uses_canonical_callbacks(self) -> None:
+        self.assertEqual(
+            list(baseline_schedulers()),
+            ["fcfs", "length_aware", "static_slo_aware"],
         )
+        self.assertTrue(all(hasattr(policy, "decide") for policy in baseline_schedulers().values()))
 
-        self.assertEqual(decision.request_id, "short")
-        self.assertIs(decision.action, Action.DEFER)
-
-    def test_slo_aware_drops_lowest_negative_slack(self) -> None:
-        decision = StaticSLOAwareScheduler().decide(
-            _snapshot(self.first, self.short, self.urgent)
-        )
-
-        self.assertEqual(decision.request_id, "urgent")
-        self.assertIs(decision.action, Action.DROP)
-
-    def test_slo_aware_admits_feasible_lowest_slack(self) -> None:
-        less_urgent = _candidate(
-            "less-urgent", arrival=2.0, service=1.0, deadline=6.0
-        )
-        decision = StaticSLOAwareScheduler().decide(
-            _snapshot(self.first, self.short, less_urgent)
-        )
-
-        self.assertEqual(decision.request_id, "less-urgent")
-        self.assertIs(decision.action, Action.ADMIT)
-
-    def test_slo_aware_defers_feasible_request_without_capacity(self) -> None:
-        decision = StaticSLOAwareScheduler().decide(
-            _snapshot(self.first, self.short, can_admit=False)
-        )
-
-        self.assertEqual(decision.request_id, "first")
-        self.assertIs(decision.action, Action.DEFER)
-
-    def test_ties_are_broken_by_arrival_then_request_id(self) -> None:
-        later = _candidate("c", arrival=2.0, service=1.0, deadline=10.0)
-        earlier_b = _candidate("b", arrival=1.0, service=1.0, deadline=10.0)
-        earlier_a = _candidate("a", arrival=1.0, service=1.0, deadline=10.0)
-
-        decision = LengthAwareScheduler().decide(
-            _snapshot(later, earlier_b, earlier_a)
-        )
-
-        self.assertEqual(decision.request_id, "a")
-        self.assertEqual(earlier_a.arrival_time_s, 1.0)
-
-    def test_empty_candidate_set_returns_no_decision(self) -> None:
-        snapshot = SchedulerSnapshot(
-            now_s=3.0,
-            candidates=(),
-            resources=ResourceView(can_admit=True),
-        )
-
-        self.assertIsNone(FCFSScheduler().decide(snapshot))
-        self.assertIsNone(LengthAwareScheduler().decide(snapshot))
-        self.assertIsNone(StaticSLOAwareScheduler().decide(snapshot))
-
-    def test_candidate_view_cannot_carry_true_output_length(self) -> None:
+    def test_candidate_view_hides_ground_truth_output_length(self) -> None:
         visible_fields = {field.name for field in fields(CandidateView)}
-
         self.assertNotIn("true_output_tokens", visible_fields)
         self.assertNotIn("output_tokens", visible_fields)
 

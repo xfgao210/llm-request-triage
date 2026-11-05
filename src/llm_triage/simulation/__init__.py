@@ -1,7 +1,7 @@
-"""Simulation kernel, hardware resource management, and lifecycle events."""
+"""Simulation kernel, scheduling contracts, and hardware resource models."""
 
-from triage.baselines import FCFSCallback
-from triage.callback import (
+from .baselines import FCFSCallback
+from .callback import (
     CandidateView,
     Decision,
     EventType,
@@ -13,20 +13,21 @@ from triage.callback import (
     SimState,
     Transition,
 )
-from triage.engine import (
+from .engine import (
     IterationRecord,
     SimResult,
     SimulatorExecutor,
     TriageKernel,
     simulate,
 )
-from triage.hardware import (
+from .hardware import (
     KV_CONSTRAINED,
     RTX_5070_QWEN05B,
     HardwareConfig,
     KVCacheManager,
 )
-from triage.request import Action, Request, RequestState, TERMINAL_STATES
+from .profile import ServiceProfile
+from .request import Action, Request, RequestState, TERMINAL_STATES
 
 __all__ = [
     "Action",
@@ -46,6 +47,7 @@ __all__ = [
     "ResourceView",
     "SchedulerCallback",
     "SchedulerSnapshot",
+    "ServiceProfile",
     "SimResult",
     "SimState",
     "SimulatorExecutor",

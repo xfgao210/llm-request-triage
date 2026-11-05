@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass
 from typing import Dict, Union
 
-from triage.request import Request, _check_finite, _check_int
+from .request import Request, _check_finite, _check_int
 
 
 # ---------------------------------------------------------------------------

@@ -5,25 +5,20 @@ every scheduling policy (FCFS, length-aware / SLO-aware baselines, the RL
 agent), as well as the lifecycle event stream consumed by the evaluation
 engine (``TECH_DESIGN.md`` §7.2–§7.5).
 
-Two scheduling interfaces are supported directly:
-
-1. **Per-candidate callback** (:class:`SchedulerCallback`): implements
-   ``decide(state: SimState) -> Action`` (and optionally
-   ``priority(view: RequestView) -> float``).
-2. **Snapshot-to-Decision scheduler** (:class:`Scheduler`): implements
-   ``decide(snapshot: SimState) -> Decision | None``, selecting a candidate
-   from ``snapshot.candidates`` and returning ``Decision(request_id, action)``
-   (matching ``llm_triage.scheduling.Scheduler`` on teammate branches).
+One callback contract supports both common policy styles. A policy implements
+``decide(state: SimState)`` and returns either an ``Action`` for the selected
+candidate or a ``Decision(request_id, action)`` for any eligible candidate. It
+may also implement ``priority(view: RequestView)`` to control which candidate
+the simulator presents first.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Protocol, Tuple, Union, runtime_checkable
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Mapping, Protocol, Tuple, Union, runtime_checkable
 
-from llm_triage.metrics.schemas import EventType, LifecycleEvent
-
-from triage.request import Action, RequestState
+from .request import Action, RequestState
 
 
 # ---------------------------------------------------------------------------
@@ -208,9 +203,31 @@ SchedulerSnapshot = SimState
 # Lifecycle events (TECH_DESIGN.md §7.5)
 # ---------------------------------------------------------------------------
 
+class EventType(str, Enum):
+    """Request lifecycle events emitted by the simulator."""
+
+    ARRIVAL = "arrival"
+    DECISION = "decision"
+    SERVICE_START = "service_start"
+    FIRST_TOKEN = "first_token"
+    COMPLETION = "completion"
+    DROP = "drop"
+    EPISODE_END = "episode_end"
+
+
+@dataclass(frozen=True)
+class LifecycleEvent:
+    """A timestamped lifecycle fact emitted by the simulation kernel."""
+
+    event_type: EventType
+    timestamp_s: float
+    request_id: str | None = None
+    details: Mapping[str, object] = field(default_factory=dict)
+
+
 @dataclass(frozen=True)
 class Transition:
-    """Result of applying one scheduling decision to :class:`~triage.engine.TriageKernel`."""
+    """Result of applying one scheduling decision to :class:`TriageKernel`."""
 
     decision: Decision
     previous_time_s: float

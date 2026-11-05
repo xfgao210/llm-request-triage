@@ -38,11 +38,11 @@ exercises capacity pressure and preemption on the same validation cohort.
 - [Metrics](docs/metrics.md) and [simulator integration contract](docs/simulator_integration.md).
 - [Technical design](TECH_DESIGN.md).
 
-The original CPU reference baseline is still runnable with
-`python experiments/run_fcfs.py`; its assumed-rate results remain in
-`results/week1/`. The development-only synthetic executor is available via
-`python experiments/run_baselines.py` and the
-[Colab notebook](notebooks/colab_baselines.ipynb).
+The original assumed-rate CPU results remain archived in `results/week1/`, but
+the temporary reference runner has been retired. Both BurstGPT and synthetic
+smoke workloads now run through the shared simulator. Use
+`python experiments/run_baselines.py` or the
+[Colab notebook](notebooks/colab_baselines.ipynb) for a small local example.
 
 ## Contributions
 

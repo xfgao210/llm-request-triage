@@ -1,37 +1,22 @@
 """Static SLO-aware scheduling baseline."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from .base import (
-    Action,
-    CandidateView,
-    CompositeScheduler,
-    Decision,
-    SchedulerSnapshot,
-)
-from .selectors import LowestEstimatedSlackSelector
-
-
-@dataclass(frozen=True)
-class _StaticSLORule:
-    """Drop estimated-infeasible work, otherwise admit when feasible."""
-
-    def act(self, candidate: CandidateView, snapshot: SchedulerSnapshot) -> Action:
-        if candidate.estimated_slack_s(snapshot.now_s) < 0:
-            return Action.DROP
-        return Action.ADMIT if snapshot.resources.can_admit else Action.DEFER
+from llm_triage.simulation import Action, RequestView, SimState
 
 
 @dataclass(frozen=True)
 class StaticSLOAwareScheduler:
-    _scheduler: CompositeScheduler = field(
-        default_factory=lambda: CompositeScheduler(
-            selector=LowestEstimatedSlackSelector(), policy=_StaticSLORule()
-        ),
-        init=False,
-        repr=False,
-    )
+    """Prioritize least slack and drop requests estimated to be infeasible."""
 
-    def decide(self, snapshot: SchedulerSnapshot) -> Decision | None:
-        return self._scheduler.decide(snapshot)
+    def priority(self, candidate: RequestView) -> tuple[float, float, str]:
+        return (
+            candidate.estimated_slack_s(),
+            candidate.arrival_time_s,
+            str(candidate.request_id),
+        )
 
+    def decide(self, snapshot: SimState) -> Action:
+        if snapshot.candidate.estimated_slack_s(snapshot.now_s) < 0:
+            return Action.DROP
+        return Action.ADMIT if snapshot.candidate_fits() else Action.DEFER
