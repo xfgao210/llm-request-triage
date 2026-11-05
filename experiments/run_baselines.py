@@ -1,4 +1,4 @@
-"""Run all deterministic baselines on the synthetic reference executor."""
+"""Run all deterministic baselines on a synthetic workload."""
 
 from __future__ import annotations
 
@@ -16,20 +16,19 @@ if str(SOURCE_ROOT) not in sys.path:
 
 from llm_triage.evaluation import (  # noqa: E402
     EvaluationConfig,
-    SyntheticConfig,
-    SyntheticExecutor,
     evaluate_policy_matrix,
-    generate_synthetic_workload,
     write_evaluation_artifacts,
 )
 from llm_triage.scheduling import baseline_schedulers  # noqa: E402
+from llm_triage.simulation import ServiceProfile, SimulatorExecutor  # noqa: E402
+from llm_triage.workload import SyntheticConfig, generate_synthetic_workload  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Run FCFS, length-aware, and static SLO-aware policies through "
-            "the deterministic synthetic reference executor."
+            "the shared simulator with a deterministic synthetic workload."
         )
     )
     parser.add_argument("--output-dir", default="results/tables")
@@ -60,12 +59,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     policies = baseline_schedulers()
     results = evaluate_policy_matrix(
         policies,
-        SyntheticExecutor(requests, synthetic_config),
+        SimulatorExecutor(
+            requests,
+            profile=ServiceProfile(
+                prefill_overhead_s=0.0,
+                prefill_rate=synthetic_config.prefill_tokens_per_s,
+                prefill_quadratic_s=0.0,
+                decode_rate=synthetic_config.decode_tokens_per_s,
+                decode_context_s=0.0,
+                contention_factor=0.0,
+            ),
+            defer_retry_s=synthetic_config.defer_seconds,
+            max_defers=synthetic_config.max_defer_decisions,
+            estimated_output_tokens=synthetic_config.estimated_output_tokens,
+        ),
         EvaluationConfig(measurement_window_s=synthetic_config.duration_s),
     )
     resolved_config = {
-        "executor": "synthetic_reference",
-        "warning": "Development model; not evidence for final project claims.",
+        "executor": "shared_simulator",
+        "warning": "Synthetic workload; not evidence for final project claims.",
         "synthetic": asdict(synthetic_config),
         "policies": list(policies),
     }
@@ -101,4 +113,3 @@ def _format_optional(value: object) -> str:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

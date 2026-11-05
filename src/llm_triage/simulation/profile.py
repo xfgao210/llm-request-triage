@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Sequence
 
-from triage.request import _check_finite, _check_int
+from .request import _check_finite, _check_int
 
 
 @dataclass(frozen=True)

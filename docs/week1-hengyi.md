@@ -28,9 +28,9 @@ From the repository root with Python 3.11+:
 
 ```bash
 python -m pip install -e .
-python -m unittest discover -s tests -v
+python -m pytest -q
 python scripts/prepare_burstgpt.py
-python experiments/run_fcfs.py
+python experiments/run_burstgpt.py
 ```
 
 If the raw CSV is already available, use
@@ -38,13 +38,16 @@ If the raw CSV is already available, use
 It must still match the pinned hash. Offline tests do not download anything;
 preparation requires the trace and upstream license, downloading missing assets.
 
-To reproduce into a separate result directory:
+To reproduce the integrated baselines into a separate result directory:
 
 ```bash
-python experiments/run_fcfs.py --output results/runs/reproduced-fcfs --summary-dir results/runs/reproduced-fcfs-summary
+python experiments/run_burstgpt.py \
+  --output results/runs/reproduced-baselines \
+  --summary-dir results/runs/reproduced-baselines-summary
 ```
 
-Compare `summary.csv` and `data_manifest.json` byte-for-byte with `results/week1/`.
+Compare `summary.csv` and `data_manifest.json` byte-for-byte with
+`results/week1-integrated/`.
 `provenance.json` also records the resolved settings and source-code hashes.
 These results have no model-training seed: FCFS and the selected trace windows
 are deterministic. Eight different windows are workload samples, not eight
@@ -62,27 +65,15 @@ episode = replay_window(windows["validation", 0], slo_s=5.0, target_rps=1.2)
 # target_rps=None keeps native source spacing instead.
 ```
 
-`Request` is immutable and contains `request_id`, `arrival_time_s`, `input_tokens`,
+Each replay request exposes `request_id`, `arrival_time_s`, `input_tokens`,
 `true_output_tokens`, and `deadline_s`. Request IDs are strings of the zero-based
 source row, excluding the CSV header. The loader forbids duplicate source rows.
-Only the environment/backend may read `true_output_tokens`.
+Only the environment/backend may read `true_output_tokens`. The simulator makes
+a fresh copy before execution, so a replay can be reused across paired policies.
 
-At a scheduling point, construct a `SchedulerSnapshot` with only arrived,
-eligible `CandidateView`s in enqueue order. Call `FCFSScheduler().decide(snapshot)`.
-The selector chooses the earliest arrival; tied arrivals preserve candidate
-order. It does not use prompt/output length, slack, or lexical request-ID order.
-Call only on nonempty queues; empty snapshots raise `ValueError`.
-
-`ResourceView.admission_available` is the kernel's feasibility decision for the
-selected head request. Set it after checking resource limits. A blocked head
-returns `DEFER`; an available head returns `ADMIT`. FCFS never drops, preempts,
-or skips a blocked head. The kernel must advance to a resource/event change on
-DEFER rather than immediately polling in a zero-time loop.
-
-The extra feasibility field is an additive proposal to section 7's illustrative
-types; it keeps KV-cache and batching logic out of FCFS. `kv_cache_available=None`
-means unmodeled, not infinite capacity. Coordinate units and the future resource
-contract before freezing the simulator API.
+The shared `llm_triage.simulation.TriageKernel` now constructs the canonical
+`SchedulerSnapshot`, enforces resource feasibility, and invokes FCFS and the
+other policies. Policies never receive ground-truth output length.
 
 ## Evaluation integration — Xiaofei
 
@@ -92,19 +83,16 @@ denominator. Fixed-window throughput counts only completions before or at the
 horizon. Drain completions contribute to final accounting, not fixed-window
 throughput. Conditional latency must be reported with drop rate and goodput.
 
-`experiments/run_fcfs.py` temporarily adapts the shared requests and scheduler to
-the existing single-worker `contributions/hengyi/triage_sim.py`. That simulator
-already preserves FCFS queue order and offers only its queue head to callbacks.
-The independent selector tests cover multiple candidates until the full snapshot
-hook is available. Replace this adapter with the team's shared kernel/collector;
-do not copy its transitions into a second implementation.
+The temporary single-worker adapter has been removed. The integrated runner
+uses the shared kernel, collector, and JSON configurations in
+`configs/burstgpt_baselines.json` and `configs/burstgpt_kv_stress.json`.
+It defaults to validation, leaving test windows unevaluated unless explicitly
+configured otherwise, and verifies processed data against its manifest.
 
-Current configuration is JSON (`configs/fcfs.json`) to keep this path dependency
-free. Change `target_rps` to `[null]` for native timing, or set positive rates.
-The runner defaults to validation, leaving test windows unevaluated in this
-delivery. It verifies the processed CSV against its manifest before running.
+## Archived reference-run validation and limits
 
-## Validation and limits
+The following figures describe the original assumed-rate runner retained in
+`results/week1/`, not the shared-simulator command above:
 
 - 15 new offline tests passed; 25 original contribution tests passed.
 - Original GPU evidence verification passed (102 timings, 2 live policies,
@@ -114,8 +102,8 @@ delivery. It verifies the processed CSV against its manifest before running.
 - 56 prepared windows; 24 FCFS validation runs, 6,144 request executions.
 - FCFS completes every arrival after draining, with no drops or unresolved work.
 
-This is a serial-worker CPU reference integration with assumed input/output
-token rates. It has no KV-cache capacity enforcement, continuous batching,
-explicit first-token event, TTFT measurements, or live GPU execution. These
-results cannot be compared directly with the previous measured-GPU experiment.
-The team simulator and metrics implementations remain the next integration step.
+Those archived results came from a serial-worker CPU reference integration with
+assumed input/output token rates. The shared runner now provides KV-cache
+capacity enforcement, continuous batching, first-token events, and TTFT
+metrics. It is still a simulation rather than live GPU execution, so neither
+result set should be presented as real serving performance.

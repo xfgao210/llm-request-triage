@@ -2,21 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Mapping, Sequence
 
-
-class EventType(str, Enum):
-    """Request lifecycle events emitted by a simulator or real backend."""
-
-    ARRIVAL = "arrival"
-    DECISION = "decision"
-    SERVICE_START = "service_start"
-    FIRST_TOKEN = "first_token"
-    COMPLETION = "completion"
-    DROP = "drop"
-    EPISODE_END = "episode_end"
+from llm_triage.simulation.callback import EventType, LifecycleEvent
 
 
 class RequestStatus(str, Enum):
@@ -25,23 +15,6 @@ class RequestStatus(str, Enum):
     COMPLETED = "completed"
     DROPPED = "dropped"
     UNFINISHED = "unfinished"
-
-
-@dataclass(frozen=True)
-class LifecycleEvent:
-    """A timestamped fact emitted by the runtime.
-
-    Required details:
-      * ARRIVAL: ``deadline_s`` and optionally ``input_tokens``.
-      * DECISION: optionally ``action`` and ``decision_overhead_s``.
-
-    Any event may include a nonnegative ``queue_length`` diagnostic.
-    """
-
-    event_type: EventType
-    timestamp_s: float
-    request_id: str | None = None
-    details: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -101,4 +74,3 @@ class EvaluationResult:
 
     request_records: Sequence[RequestRecord]
     summary: Mapping[str, float | int | None]
-

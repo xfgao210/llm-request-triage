@@ -12,8 +12,8 @@ from llm_triage.metrics import EventType, LifecycleEvent, evaluate_events
 from llm_triage.scheduling import Action, FCFSScheduler, baseline_schedulers
 from llm_triage.workload.burstgpt import TraceRow, prepare
 from llm_triage.workload.transforms import replay_window
-from triage import HardwareConfig, Request, ServiceProfile, SimulatorExecutor, simulate
-from triage.callback import EventType as SimulatorEventType, LifecycleEvent as SimulatorEvent
+from llm_triage.simulation import HardwareConfig, Request, ServiceProfile, SimulatorExecutor, simulate
+from llm_triage.simulation.callback import EventType as SimulatorEventType, LifecycleEvent as SimulatorEvent
 
 
 EXACT = ServiceProfile(prefill_overhead_s=.1, prefill_rate=None, prefill_quadratic_s=0,

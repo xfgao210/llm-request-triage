@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from .base import Scheduler
+from llm_triage.simulation import SchedulerCallback
 from .fcfs import FCFSScheduler
 from .length_aware import LengthAwareScheduler
 from .slo_aware import StaticSLOAwareScheduler
 
 
-def baseline_schedulers() -> dict[str, Scheduler]:
+def baseline_schedulers() -> dict[str, SchedulerCallback]:
     """Return a fresh, deterministically ordered baseline policy mapping."""
 
     return {
@@ -16,4 +16,3 @@ def baseline_schedulers() -> dict[str, Scheduler]:
         "length_aware": LengthAwareScheduler(),
         "static_slo_aware": StaticSLOAwareScheduler(),
     }
-

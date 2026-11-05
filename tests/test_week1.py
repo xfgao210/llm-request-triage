@@ -1,7 +1,6 @@
-"""Offline tests: parsing, alignment, split isolation, FCFS, and integration."""
+"""Offline tests for parsing, alignment, split isolation, and preparation."""
 import csv
-from dataclasses import fields, replace
-import json
+from dataclasses import replace
 from pathlib import Path
 import sys
 import tempfile
@@ -11,12 +10,10 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from llm_triage.types import Action, CandidateView, ResourceView, SchedulerSnapshot
-from llm_triage.scheduling.fcfs import FCFSScheduler
 from llm_triage.workload.burstgpt import (TraceRow, acquire, chronological_split, load_windows,
-                                        parse_trace, prepare, select_windows, sha256)
+                                        parse_trace, prepare, select_windows)
 from llm_triage.workload.transforms import replay_window
-from experiments.run_fcfs import run_reference, run_suite
+from experiments.run_burstgpt import run_suite
 
 
 class Week1Tests(unittest.TestCase):
@@ -108,45 +105,6 @@ class Week1Tests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 replay_window(invalid)
 
-    def candidate(self, identity, arrival, estimate=1):
-        return CandidateView(identity, arrival, 1, estimate, 10, estimate)
-
-    def test_fcfs_earliest_arrival_stable_ties_and_feasibility(self):
-        scheduler = FCFSScheduler()
-        snapshot = SchedulerSnapshot(3, (self.candidate("later", 2), self.candidate("10", 1, 100),
-                                        self.candidate("2", 1, .1)), ResourceView(can_admit=True))
-        self.assertEqual(scheduler.decide(snapshot).request_id, "10")
-        self.assertEqual(scheduler.decide(snapshot).action, Action.ADMIT)
-        blocked = replace(snapshot, resources=ResourceView(active_batch_size=1, can_admit=False))
-        self.assertEqual(scheduler.decide(blocked).action, Action.DEFER)
-        self.assertEqual(scheduler.decide(blocked).request_id, "10")
-        # Batching feasibility is supplied by the future kernel, not guessed by FCFS.
-        batching = replace(snapshot, resources=ResourceView(active_batch_size=1, can_admit=True))
-        self.assertEqual(scheduler.decide(batching).action, Action.ADMIT)
-        self.assertIsNone(scheduler.decide(replace(snapshot, candidates=())))
-
-    def test_hidden_output_not_in_snapshot_contract(self):
-        for cls in (CandidateView, ResourceView, SchedulerSnapshot):
-            self.assertNotIn("true_output_tokens", {f.name for f in fields(cls)})
-            self.assertNotIn("output_tokens", {f.name for f in fields(cls)})
-
-    def test_reference_hand_calculated_queue_and_drain(self):
-        replay = replay_window([TraceRow(10, 0, 1, 1), TraceRow(11, 1, 1, 1)], slo_s=2)
-        records, _, summary = run_reference(replay, prefill_rate=1, decode_rate=1)
-        self.assertEqual([r["request_id"] for r in records], ["10", "11"])
-        self.assertEqual([r["start"] for r in records], [0, 2])
-        self.assertEqual([r["completion"] for r in records], [2, 4])
-        self.assertEqual(summary["slo_attainment"], .5)
-        self.assertEqual(summary["window_completed"], 1)
-        self.assertEqual(summary["completed"], 2)
-        self.assertEqual(summary["dropped"], 0)
-
-    def test_tied_arrivals_keep_source_order(self):
-        replay = replay_window([TraceRow(2, 0, 1, 1), TraceRow(10, 0, 1, 1),
-                                TraceRow(11, 1, 1, 1)], slo_s=10)
-        records, _, _ = run_reference(replay, prefill_rate=1, decode_rate=1)
-        self.assertEqual([r["start"] for r in records], [0, 2, 4])
-
     def test_acquisition_rejects_bad_cache_or_local_source(self):
         raw = self.folder / "raw"
         raw.mkdir()
@@ -166,7 +124,7 @@ class Week1Tests(unittest.TestCase):
         self.assertFalse((raw / "BurstGPT_1.csv").exists())
         self.assertFalse((raw / "BurstGPT_1.part").exists())
 
-    def test_end_to_end_preparation_and_repeatable_baseline(self):
+    def test_preparation_manifest_and_duplicate_detection(self):
         source = self.make_trace()
         data = self.folder / "data"
         (data / "raw").mkdir(parents=True)
@@ -178,18 +136,7 @@ class Week1Tests(unittest.TestCase):
         training = [r for (split, _), chunk in windows.items() if split == "train" for r in chunk]
         self.assertEqual(manifest["estimated_output_tokens_train_mean"],
                          sum(r.true_output_tokens for r in training) / len(training))
-        config = dict(split="validation", target_rps=[1.0, None], slo_s=2,
-                      prefill_tokens_per_s=1, decode_tokens_per_s=1)
-        first = run_suite(config, data / "processed", self.folder / "runs", self.folder / "summary")
-        summary_bytes = (self.folder / "summary/summary.csv").read_bytes()
-        second = run_suite(config, data / "processed", self.folder / "runs", self.folder / "summary")
-        self.assertEqual(first, second)
-        self.assertEqual(summary_bytes, (self.folder / "summary/summary.csv").read_bytes())
-        self.assertEqual(len(first), 4)
-        self.assertTrue(all(r["arrivals"] == r["completed"] == 4 for r in first))
-        provenance = json.loads((self.folder / "summary/provenance.json").read_text())
-        self.assertEqual(provenance["policy_runs"], 4)
-        # Reused source IDs and tampered artifacts fail loudly.
+        # Reused source IDs fail loudly.
         csv_path = data / "processed/burstgpt_windows.csv"
         with csv_path.open(newline="") as stream:
             rows = list(csv.DictReader(stream))
@@ -197,8 +144,26 @@ class Week1Tests(unittest.TestCase):
             csv.DictWriter(stream, fieldnames=list(rows[0])).writerow(rows[0])
         with self.assertRaisesRegex(ValueError, "reuse"):
             load_windows(csv_path)
-        with self.assertRaisesRegex(ValueError, "digest"):
-            run_suite(config, data / "processed", self.folder / "runs", self.folder / "summary")
+        config = {
+            "split": "validation",
+            "target_rps": [1.0],
+            "slo_s": 2.0,
+            "hardware": {
+                "max_batch_size": 2,
+                "kv_block_size": 16,
+                "kv_total_blocks": 32,
+            },
+            "defer_retry_s": 0.01,
+            "max_defers": 64,
+            "expire_overdue_in_queue": False,
+        }
+        with self.assertRaisesRegex(ValueError, "Prepared windows differ"):
+            run_suite(
+                config,
+                data / "processed",
+                self.folder / "runs",
+                self.folder / "summary",
+            )
 
 
 if __name__ == "__main__":
