@@ -99,3 +99,17 @@ logs should retain at least:
 Component logging is required to diagnose reward domination and degenerate
 policies before interpreting aggregate return.
 
+## Simulator integration
+
+`KernelRewardAdapter` consumes the canonical simulator `Transition` and its
+lifecycle events. The Gymnasium environment should initialize it with the
+arrival events emitted by `TriageKernel.reset()`, then call exactly one of
+`reward()` or `reward_breakdown()` for every transition returned by
+`TriageKernel.apply()`.
+
+The adapter reconstructs only outcome facts that have already been emitted:
+arrival/deadline, first service start, completion, drop, and elapsed defer time.
+It never reads true output length or future workload state. `last_breakdown`
+and `cumulative_breakdown` provide the component-level logging required above.
+Until lifecycle events expose attributed GPU time, the wasted-service term uses
+the observable interval from first service start through late completion.

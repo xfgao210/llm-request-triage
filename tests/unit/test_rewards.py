@@ -7,10 +7,12 @@ import unittest
 from llm_triage.rl import (
     AsymmetricRewardModel,
     EpisodeOutcome,
+    KernelRewardAdapter,
     RewardConfig,
     RewardEvent,
     RewardTransition,
 )
+from llm_triage.simulation import Action, Request, TriageKernel
 
 
 class RewardModelTests(unittest.TestCase):
@@ -112,6 +114,12 @@ class RewardModelTests(unittest.TestCase):
 
         self.assertEqual(reward.total, 0.0)
 
+    def test_zero_duration_episode_has_safe_rate_diagnostics(self) -> None:
+        outcome = EpisodeOutcome(1, 0, 0, 1, 0, 0.0)
+
+        self.assertEqual(outcome.throughput_rps, 0.0)
+        self.assertEqual(outcome.goodput_rps, 0.0)
+
     def test_breakdown_reports_components_and_total(self) -> None:
         reward = self.model.transition_reward(
             RewardTransition(
@@ -159,6 +167,68 @@ class RewardModelTests(unittest.TestCase):
         self.assertEqual(weights["terminal_drop_all_penalty"], 2.0)
 
 
+class KernelRewardAdapterTests(unittest.TestCase):
+    def _reset(self, request: Request, **kernel_kwargs):
+        kernel = TriageKernel(**kernel_kwargs)
+        kernel.reset([request])
+        adapter = KernelRewardAdapter()
+        adapter.reset(kernel.events())
+        return kernel, adapter
+
+    def test_on_time_completion_and_terminal_objective(self) -> None:
+        kernel, adapter = self._reset(Request("r1", 0.0, 8, 1, 10.0))
+
+        transition = kernel.apply(Action.ADMIT)
+        reward = adapter.reward_breakdown(transition)
+
+        self.assertTrue(transition.done)
+        self.assertEqual(reward.on_time_completion, 1.0)
+        self.assertEqual(reward.terminal_slo_attainment, 1.0)
+        self.assertEqual(reward.terminal_completion_fraction, 0.5)
+        self.assertEqual(reward.total, 2.5)
+        self.assertEqual(adapter.outcome.slo_met, 1)
+
+    def test_late_completion_penalizes_wasted_service(self) -> None:
+        kernel, adapter = self._reset(Request("late", 0.0, 8, 1, 0.001))
+
+        reward = adapter.reward_breakdown(kernel.apply(Action.ADMIT))
+
+        self.assertEqual(reward.late_completion, -1.0)
+        self.assertLess(reward.wasted_service, 0.0)
+        self.assertEqual(reward.terminal_slo_attainment, 0.0)
+        self.assertEqual(adapter.outcome.completed, 1)
+        self.assertEqual(adapter.outcome.slo_met, 0)
+
+    def test_drop_all_guardrail_handles_zero_duration_episode(self) -> None:
+        kernel, adapter = self._reset(Request("drop", 0.0, 8, 1, 5.0))
+
+        reward = adapter.reward_breakdown(kernel.apply(Action.DROP))
+
+        self.assertEqual(reward.drop, -0.2)
+        self.assertEqual(reward.terminal_drop_all, -2.0)
+        self.assertEqual(adapter.outcome.duration_s, 0.0)
+        self.assertEqual(adapter.outcome.dropped, 1)
+
+    def test_defer_cost_uses_elapsed_simulation_time(self) -> None:
+        kernel, adapter = self._reset(
+            Request("defer", 0.0, 8, 1, 5.0), defer_retry_s=0.25
+        )
+
+        first = adapter.reward_breakdown(kernel.apply(Action.DEFER))
+        second = adapter.reward_breakdown(kernel.apply(Action.DROP))
+
+        self.assertAlmostEqual(first.defer, -0.005)
+        self.assertEqual(second.defer, 0.0)
+        self.assertEqual(second.drop, -0.2)
+
+    def test_adapter_rejects_reuse_after_terminal_transition(self) -> None:
+        kernel, adapter = self._reset(Request("done", 0.0, 8, 1, 5.0))
+        transition = kernel.apply(Action.DROP)
+        adapter.reward(transition)
+
+        with self.assertRaisesRegex(RuntimeError, "must be reset"):
+            adapter.reward(transition)
+
+
 if __name__ == "__main__":
     unittest.main()
-

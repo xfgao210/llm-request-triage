@@ -71,7 +71,7 @@ class EpisodeOutcome:
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 raise ValueError(f"{name} must be a nonnegative integer")
-        _require_positive(self.duration_s, "duration_s")
+        _require_nonnegative(self.duration_s, "duration_s")
         if self.completed + self.dropped + self.unfinished != self.arrivals:
             raise ValueError("Episode terminal counts must sum to arrivals")
         if self.slo_met > self.completed:
@@ -91,11 +91,11 @@ class EpisodeOutcome:
 
     @property
     def throughput_rps(self) -> float:
-        return self.completed / self.duration_s
+        return self.completed / self.duration_s if self.duration_s > 0 else 0.0
 
     @property
     def goodput_rps(self) -> float:
-        return self.slo_met / self.duration_s
+        return self.slo_met / self.duration_s if self.duration_s > 0 else 0.0
 
     @property
     def dropped_all(self) -> bool:
@@ -128,4 +128,3 @@ def _require_positive(value: object, name: str) -> float:
     if number <= 0:
         raise ValueError(f"{name} must be positive")
     return number
-
