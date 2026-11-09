@@ -9,7 +9,7 @@ or access to hidden request truth.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Protocol, runtime_checkable
 
 from llm_triage.simulation import Action, EventType, LifecycleEvent, Transition
 
@@ -25,8 +25,27 @@ class _RequestLedger:
     terminal: bool = False
 
 
-class KernelRewardAdapter:
+@runtime_checkable
+class RewardModel(Protocol):
+    """Environment-facing contract for scoring simulator transitions.
+
+    Implementations may keep episode-local accounting, but the environment
+    only depends on this transition-level method.  Stateful implementations
+    must be reset before the first transition of each episode.
+    """
+
+    def reward(self, transition: Transition) -> float:
+        """Consume one canonical simulator transition and return its reward."""
+        ...
+
+
+class KernelRewardAdapter(RewardModel):
     """Convert one kernel transition into a scalar reward and breakdown.
+
+    This is the canonical :class:`RewardModel` implementation used by the RL
+    environment.  It composes the pure :class:`AsymmetricRewardModel` scoring
+    policy with the episode accounting needed to interpret kernel lifecycle
+    events.
 
     Call :meth:`reset` with the events emitted by ``TriageKernel.reset()``,
     then call either :meth:`reward` or :meth:`reward_breakdown` exactly once

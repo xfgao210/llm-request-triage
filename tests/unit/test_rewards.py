@@ -10,6 +10,7 @@ from llm_triage.rl import (
     KernelRewardAdapter,
     RewardConfig,
     RewardEvent,
+    RewardModel,
     RewardTransition,
 )
 from llm_triage.simulation import Action, Request, TriageKernel
@@ -168,6 +169,12 @@ class RewardModelTests(unittest.TestCase):
 
 
 class KernelRewardAdapterTests(unittest.TestCase):
+    def test_adapter_is_the_environment_reward_model(self) -> None:
+        adapter = KernelRewardAdapter()
+
+        self.assertIsInstance(adapter, RewardModel)
+        self.assertFalse(isinstance(AsymmetricRewardModel(), RewardModel))
+
     def _reset(self, request: Request, **kernel_kwargs):
         kernel = TriageKernel(**kernel_kwargs)
         kernel.reset([request])

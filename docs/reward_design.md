@@ -101,11 +101,27 @@ policies before interpreting aggregate return.
 
 ## Simulator integration
 
-`KernelRewardAdapter` consumes the canonical simulator `Transition` and its
-lifecycle events. The Gymnasium environment should initialize it with the
-arrival events emitted by `TriageKernel.reset()`, then call exactly one of
-`reward()` or `reward_breakdown()` for every transition returned by
-`TriageKernel.apply()`.
+`RewardModel` is the environment-facing protocol. It exposes the stable
+`reward(Transition) -> float` contract from `TECH_DESIGN.md`; the Gymnasium
+environment does not depend on reward formulas or event-accounting details.
+
+`KernelRewardAdapter` is the canonical `RewardModel` implementation. It
+composes `AsymmetricRewardModel`, which owns the pure asymmetric scoring
+formula, with the episode accounting required to consume canonical simulator
+transitions and lifecycle events. The environment integration is therefore:
+
+```python
+reward_model: RewardModel = KernelRewardAdapter()
+kernel.reset(requests)
+reward_model.reset(kernel.events())
+
+transition = kernel.apply(action)
+reward = reward_model.reward(transition)
+```
+
+The Gymnasium environment must call exactly one of `reward()` or
+`reward_breakdown()` for every transition returned by `TriageKernel.apply()`.
+It must not duplicate reward weights or formulas inside `step()`.
 
 The adapter reconstructs only outcome facts that have already been emitted:
 arrival/deadline, first service start, completion, drop, and elapsed defer time.
