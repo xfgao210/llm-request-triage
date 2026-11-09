@@ -1,0 +1,97 @@
+{
+  "actions": [
+    "admit",
+    "defer",
+    "drop"
+  ],
+  "batch_size": 64,
+  "checkpoints": [
+    {
+      "episode": 8,
+      "seed": 7,
+      "sha256": "cc7a3a2af2e52e5e9dfceeb403d0e69baed31950581f38e6cec167399c519df1",
+      "validation_attainment": 0.8349609375
+    },
+    {
+      "episode": 8,
+      "seed": 17,
+      "sha256": "3d35517bcc889d68ed745b38341851e99a1dce7e0acabe361c6299bc8baedaf5",
+      "validation_attainment": 0.834716796875
+    },
+    {
+      "episode": 8,
+      "seed": 27,
+      "sha256": "d9d5bf964fb5d9cf2ad9e9c789bd3b7a6d0f95e02775c3fb6cb3e29222b32336",
+      "validation_attainment": 0.84033203125
+    }
+  ],
+  "config": {
+    "decisions": {
+      "defer_retry_s": 0.25,
+      "max_defers": 5
+    },
+    "episodes": 24,
+    "hardware": {
+      "gpu_name": "RTX-5070-12GB/Qwen2.5-0.5B",
+      "kv_block_size": 16,
+      "kv_total_blocks": 48059,
+      "max_batch_size": 32
+    },
+    "reward": {
+      "defer": -0.02,
+      "drop": -0.2,
+      "late": -0.4,
+      "on_time": 1.0,
+      "terminal_attainment": 1.0,
+      "unfinished": -0.4,
+      "wasted_gpu_fraction": 0.2
+    },
+    "seeds": [
+      7,
+      17,
+      27
+    ],
+    "slo_s": 5.0,
+    "target_rps": [
+      1.2,
+      2.4
+    ],
+    "validate_every": 8
+  },
+  "estimated_output_tokens": 109.6070556640625,
+  "features": [
+    "remaining_slo",
+    "estimated_service",
+    "input_length",
+    "eligible_queue",
+    "estimated_output",
+    "episode_progress",
+    "defer_fraction",
+    "batch_utilization",
+    "kv_utilization"
+  ],
+  "gymnasium": "1.4.0",
+  "manifest_sha256": "a90bf7724176790cb6847315e4c4b3a4db003bc9eab6a090f756990b08232977",
+  "numpy": "2.5.4",
+  "replay_capacity": 50000,
+  "selection_split": "validation",
+  "service_profile": {
+    "contention_factor": 0.5,
+    "contention_ref_batch": 32,
+    "decode_context_s": 4.057988306430102e-08,
+    "decode_rate": 35.849389110100596,
+    "default_estimated_output_tokens": 144.0,
+    "prefill_overhead_s": 0.025490567869413613,
+    "prefill_quadratic_s": 3.183762086121867e-08,
+    "prefill_rate": null,
+    "provenance": "measured RTX 5070 / Qwen2.5-0.5B batch=1 + assumed batch contention"
+  },
+  "source_sha256": "46fc9480ef0b748ecb2b51d512ff08c196b031782cbe6f78e28044d768e86d5a",
+  "test_evaluated": false,
+  "trace_sha256": "d76a69b0fe6f21b6d9f975631d78a85c03cf2244554252605f11a6d6dc25e44c",
+  "train_windows": 32,
+  "update_interval": 4,
+  "validation_runs": 96,
+  "validation_windows": 8,
+  "warmup": 256
+}
