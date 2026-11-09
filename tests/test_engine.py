@@ -4,7 +4,7 @@ from dataclasses import fields
 
 import pytest
 
-from triage import (
+from llm_triage.simulation import (
     Action,
     Decision,
     EventType,
@@ -101,6 +101,9 @@ class TestLifecycle:
     def test_duplicate_ids_rejected(self):
         with pytest.raises(ValueError):
             simulate([req(1), req(1)], FCFSCallback(), HW, P)
+
+        with pytest.raises(ValueError):
+            simulate([req(1), req("1")], FCFSCallback(), HW, P)
 
 
 # ---------------------------------------------------------------------------
@@ -494,12 +497,12 @@ class TestAccounting:
 
 
 # ---------------------------------------------------------------------------
-# Cross-branch package exports (src/llm_triage/)
+# Public package exports
 # ---------------------------------------------------------------------------
 
 class TestLLMTriagePackageExports:
     def test_imports_from_llm_triage_simulation_and_service(self):
-        from llm_triage.service import ServiceProfile as SP
+        from llm_triage.simulation import ServiceProfile as SP
         from llm_triage.simulation import (
             FCFSCallback as FCFS,
             SimulatorExecutor as Exec,

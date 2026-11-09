@@ -2,8 +2,8 @@
 
 import pytest
 
-from triage.hardware import RTX_5070_QWEN05B, HardwareConfig, KVCacheManager
-from triage.request import Request
+from llm_triage.simulation.hardware import RTX_5070_QWEN05B, HardwareConfig, KVCacheManager
+from llm_triage.simulation.request import Request
 
 
 def _req(rid=1, inp=64, out=32):

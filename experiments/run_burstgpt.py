@@ -13,9 +13,9 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
 from llm_triage.evaluation import EvaluationConfig, evaluate_policy_matrix, write_evaluation_artifacts
 from llm_triage.scheduling import baseline_schedulers
+from llm_triage.simulation import HardwareConfig, ServiceProfile, SimulatorExecutor
 from llm_triage.workload.burstgpt import load_windows, sha256
 from llm_triage.workload.transforms import replay_window
-from triage import HardwareConfig, ServiceProfile, SimulatorExecutor
 
 
 def write_json(path, value):
@@ -73,8 +73,19 @@ def run_suite(config, processed_dir, output_dir, summary_dir):
                 EvaluationConfig(measurement_window_s=replay.horizon_s),
             )
             label = f"{split}_{index:02d}_" + ("native" if rate is None else f"rps{rate:g}")
-            cohort = hashlib.sha256(json.dumps([asdict(r) for r in replay.requests],
-                                              sort_keys=True).encode()).hexdigest()
+            cohort_requests = [
+                {
+                    "request_id": str(request.request_id),
+                    "arrival_time_s": request.arrival_time_s,
+                    "input_tokens": request.input_tokens,
+                    "true_output_tokens": request.true_output_tokens,
+                    "deadline_s": request.deadline_s,
+                }
+                for request in replay.requests
+            ]
+            cohort = hashlib.sha256(
+                json.dumps(cohort_requests, sort_keys=True).encode()
+            ).hexdigest()
             write_evaluation_artifacts(results, output_dir / label,
                 resolved_config=dict(**config, window=index, horizon_s=replay.horizon_s,
                                      time_scale=replay.time_scale, cohort_sha256=cohort,
@@ -100,8 +111,8 @@ def run_suite(config, processed_dir, output_dir, summary_dir):
     _write_csv(summary_dir / "summary.csv", summaries)
     _write_csv(summary_dir / "scheduler_overhead.csv", overheads)
     (summary_dir / "data_manifest.json").write_bytes(manifest_path.read_bytes())
-    paths = [ROOT / "experiments/run_burstgpt.py", *sorted((ROOT / "src/llm_triage").rglob("*.py")),
-             *sorted((ROOT / "triage").rglob("*.py"))]
+    paths = [ROOT / "experiments/run_burstgpt.py",
+             *sorted((ROOT / "src/llm_triage").rglob("*.py"))]
     write_json(summary_dir / "provenance.json", dict(
         config=config, service_profile=asdict(profile), hardware=asdict(hardware),
         estimated_output_tokens_train_mean=estimate,

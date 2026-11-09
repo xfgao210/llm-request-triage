@@ -7,7 +7,7 @@ This module implements both:
    `is_terminal()`, `events()`) used by baseline evaluation and the Week 2
    Gymnasium RL environment wrapper.
 2. :func:`simulate`: the convenience runner that drives :class:`TriageKernel`
-   to completion with any :class:`~triage.callback.SchedulerCallback` or
+   to completion with any :class:`~llm_triage.simulation.callback.SchedulerCallback` or
    ``llm_triage.scheduling.Scheduler`` and returns a :class:`SimResult`.
 3. :class:`SimulatorExecutor`: the ``PolicyExecutor`` adapter
    (``run(policy_name, scheduler) -> Iterable[LifecycleEvent]``) consumed by
@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 import time
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
-from triage.callback import (
+from .callback import (
     Decision,
     EventType,
     LifecycleEvent,
@@ -46,9 +46,9 @@ from triage.callback import (
     SimState,
     Transition,
 )
-from triage.hardware import HardwareConfig, KVCacheManager
-from triage.profile import ServiceProfile
-from triage.request import (
+from .hardware import HardwareConfig, KVCacheManager
+from .profile import ServiceProfile
+from .request import (
     Action,
     Request,
     RequestState,
@@ -233,9 +233,11 @@ class TriageKernel:
         """Reset the kernel with a fresh copy of *requests* and advance to the
         first scheduling decision point (or termination if *requests* is empty)."""
         copied = [Request.from_any(r) for r in requests]
-        ids = [r.request_id for r in copied]
+        # Lifecycle events serialize request IDs as strings. Reject collisions
+        # such as 1 and "1" before they become indistinguishable downstream.
+        ids = [str(r.request_id) for r in copied]
         if len(set(ids)) != len(ids):
-            raise ValueError("request_ids in the workload must be unique")
+            raise ValueError("request_ids must be unique after string normalization")
 
         self.requests = copied
         self.kv = KVCacheManager(self.hw)
@@ -793,7 +795,7 @@ def simulate(
     Parameters
     ----------
     workload:
-        Requests in any order (either :class:`~triage.request.Request` or
+        Requests in any order (either :class:`~llm_triage.simulation.request.Request` or
         duck-typed ``llm_triage`` request objects).  Copied internally so the
         input objects are never mutated.
     callback:
@@ -815,7 +817,7 @@ def simulate(
         FCFS serve overdue work late unless the policy itself drops them.
     estimated_output_tokens:
         Policy-visible output token estimate exposed on each
-        :class:`~triage.callback.RequestView`.
+        :class:`~llm_triage.simulation.callback.RequestView`.
     service_estimator:
         Optional ``(input_tokens, estimated_output_tokens) -> float`` function
         for policy-visible service time estimation.

@@ -4,8 +4,8 @@ from dataclasses import fields
 
 import pytest
 
-from triage.callback import CandidateView, Decision, RequestView, SimState
-from triage.request import Action, Request, RequestState
+from llm_triage.simulation.callback import CandidateView, Decision, RequestView, SimState
+from llm_triage.simulation.request import Action, Request, RequestState
 
 
 def view(rid=1, inp=64, now=1.0):

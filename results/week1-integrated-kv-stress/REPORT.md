@@ -10,7 +10,7 @@ Hardware is deliberately restricted to **4 batch slots and 4,096 KV tokens**
 
 | Policy | SLO attainment | Drop rate | Unfinished rate | Mean preemptions/window | Mean window P95 TTFT (s) | Goodput (req/s) |
 |---|---:|---:|---:|---:|---:|---:|
-| FCFS | 62.30% | 0.00% | 0.05% | 8.625 | 68.342 | 1.484 |
+| FCFS | 62.30% | 0.00% | 0.00% | 8.625 | 68.481 | 1.484 |
 | Length-aware | 75.15% | 0.00% | 2.00% | 3.125 | 68.442 | 1.785 |
 | Static SLO-aware | 70.31% | 23.24% | 0.00% | 2.375 | 0.971 | 1.671 |
 

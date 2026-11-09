@@ -39,12 +39,9 @@ runs. Verbose per-window tables also include the measured overhead.
 
 ## Resolved integration boundaries
 
-- The validated `llm_triage.scheduling.base` types are the canonical policy
-  contracts. `llm_triage.types` retains the immutable workload `Request` and
-  re-exports those contracts. The earlier duplicate scheduling types are removed.
-- `triage.callback` re-exports the metrics layer's `EventType` and
-  `LifecycleEvent`. Previously the collector used enum identity checks while
-  the simulator produced a different enum class, failing on its first event.
+- `llm_triage.simulation.callback` owns the canonical policy and lifecycle
+  contracts. The scheduling and metrics packages consume or re-export those
+  types instead of defining competing copies.
 - Source arrival times are emitted during prefill/decode before iteration-end
   events. Arrivals during an iteration retain their true timestamps even though
   admission waits until an iteration boundary. This preserves chronological
@@ -54,9 +51,9 @@ runs. Verbose per-window tables also include the measured overhead.
   Length-aware and SLO-aware selectors retain their existing deterministic ties.
 - `SimulatorExecutor.results` retains the backend result per policy for
   attribution/preemption diagnostics and cross-checking the metrics denominator.
-- Packaging includes both `triage` and `llm_triage`; Python 3.11+ is the supported
-  common version. Both CI workflows run pytest, including simulator function tests
-  that unittest discovery alone would not execute.
+- Packaging uses a single `src/llm_triage` tree; Python 3.11+ is the supported
+  common version. CI runs pytest, including simulator function tests that
+  unittest discovery alone would not execute.
 
 ## Timing and metrics
 

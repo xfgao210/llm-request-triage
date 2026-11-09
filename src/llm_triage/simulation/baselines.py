@@ -2,13 +2,13 @@
 
 FCFS lives here as the simplest end-to-end check of the callback hook.
 The team's baseline schedulers (length-aware, static SLO-aware) implement
-the same :class:`~triage.callback.SchedulerCallback` protocol.
+the same :class:`~llm_triage.simulation.callback.SchedulerCallback` protocol.
 """
 
 from __future__ import annotations
 
-from triage.callback import SimState
-from triage.request import Action
+from .callback import SimState
+from .request import Action
 
 
 class FCFSCallback:

@@ -6,8 +6,8 @@ from dataclasses import dataclass
 import math
 from typing import Iterable, Mapping, Protocol, runtime_checkable
 
-from llm_triage.metrics import EvaluationResult, LifecycleEvent, evaluate_events
-from llm_triage.scheduling import Scheduler
+from llm_triage.metrics import EvaluationResult, evaluate_events
+from llm_triage.simulation import LifecycleEvent, SchedulerCallback
 
 
 @dataclass(frozen=True)
@@ -41,13 +41,13 @@ class PolicyExecutor(Protocol):
     """
 
     def run(
-        self, policy_name: str, scheduler: Scheduler
+        self, policy_name: str, scheduler: SchedulerCallback
     ) -> Iterable[LifecycleEvent]:
         """Execute one policy and emit a chronological lifecycle stream."""
 
 
 def evaluate_policy_matrix(
-    policies: Mapping[str, Scheduler],
+    policies: Mapping[str, SchedulerCallback],
     executor: PolicyExecutor,
     config: EvaluationConfig,
 ) -> dict[str, EvaluationResult]:
@@ -59,8 +59,8 @@ def evaluate_policy_matrix(
     for policy_name, scheduler in policies.items():
         if not isinstance(policy_name, str) or not policy_name.strip():
             raise ValueError("Policy names must be nonempty strings")
-        if not isinstance(scheduler, Scheduler):
-            raise TypeError(f"Policy {policy_name!r} does not implement Scheduler")
+        if not isinstance(scheduler, SchedulerCallback):
+            raise TypeError(f"Policy {policy_name!r} does not implement SchedulerCallback")
         events = executor.run(policy_name, scheduler)
         results[policy_name] = evaluate_events(
             events,

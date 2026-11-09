@@ -1,34 +1,30 @@
-"""Deterministic and learned scheduling-policy interfaces."""
+"""Policies built directly on the canonical simulator scheduling contract."""
 
-from .base import (
+from llm_triage.simulation import (
     Action,
-    CandidateSelector,
     CandidateView,
-    CompositeScheduler,
     Decision,
     ResourceView,
-    Scheduler,
+    SchedulerCallback,
     SchedulerSnapshot,
-    TriagePolicy,
 )
 from .baselines import baseline_schedulers
 from .fcfs import FCFSScheduler
 from .length_aware import LengthAwareScheduler
 from .slo_aware import StaticSLOAwareScheduler
 
+Scheduler = SchedulerCallback
+
 __all__ = [
     "Action",
-    "CandidateSelector",
     "CandidateView",
-    "CompositeScheduler",
     "Decision",
     "FCFSScheduler",
     "LengthAwareScheduler",
     "ResourceView",
     "Scheduler",
+    "SchedulerCallback",
     "SchedulerSnapshot",
     "StaticSLOAwareScheduler",
-    "TriagePolicy",
     "baseline_schedulers",
 ]
-

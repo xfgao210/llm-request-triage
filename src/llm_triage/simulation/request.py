@@ -97,7 +97,8 @@ class Request:
     number of tokens the model will generate.  The simulator engine uses it to
     know when decoding finishes, but it is **never** exposed to scheduling
     callbacks — they only see the fields surfaced through
-    :class:`~triage.callback.RequestView` / :class:`~triage.callback.CandidateView`.
+    :class:`~llm_triage.simulation.callback.RequestView` /
+    :class:`~llm_triage.simulation.callback.CandidateView`.
     """
 
     request_id: Union[int, str]

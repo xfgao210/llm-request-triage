@@ -1,4 +1,4 @@
-# Simulator Architecture (`triage/` & `src/llm_triage/simulation/`)
+# Simulator Architecture (`src/llm_triage/simulation/`)
 
 **Owner:** Vikas (vc2466) | **Milestone:** Week 1 — Core Simulator Backbone
 
@@ -7,7 +7,9 @@ An iteration-level LLM serving simulator with continuous batching, a paged KV-ca
 ## Quickstart
 
 ```python
-from triage import simulate, FCFSCallback, Request, RTX_5070_QWEN05B, ServiceProfile
+from llm_triage.simulation import (
+    FCFSCallback, Request, RTX_5070_QWEN05B, ServiceProfile, simulate,
+)
 
 reqs = [
     Request(
@@ -31,16 +33,16 @@ python scripts/smoke_sim.py    # FCFS on a 2,000-request 3x-burst workload
 
 ## Module Layout
 
-All symbols are exported under both `triage` and `llm_triage.simulation` / `llm_triage.service`:
+The simulator has one canonical implementation under `llm_triage.simulation`:
 
 | Module | Contents |
 |---|---|
-| `triage/request.py` | `Request` (supports `int` or `str` IDs and `llm_triage` field aliases), `RequestState`, and `Action` (`ADMIT`, `DEFER`, `DROP` with string/int/enum coercion) |
-| `triage/hardware.py` | `HardwareConfig` (batch limit, KV block size/budget, `from_model()` sizing from GPU VRAM + model shape), `KVCacheManager` |
-| `triage/profile.py` | `ServiceProfile`: prefill/decode iteration timing and policy-visible `estimate_service_time()`; defaults match the measured RTX 5070 / Qwen2.5-0.5B `context_quadratic` calibration |
-| `triage/callback.py` | `SchedulerCallback` protocol, `SimState` / `SchedulerSnapshot`, `RequestView` / `CandidateView` (strictly omits ground-truth `output_tokens`), `ResourceView`, `Decision`, and `LifecycleEvent` |
-| `triage/engine.py` | `TriageKernel` (steppable `reset` / `snapshot` / `apply` / `is_terminal` / `events` state machine), `simulate()` → `SimResult`, and `SimulatorExecutor` (`PolicyExecutor` adapter) |
-| `triage/baselines.py` | Reference `FCFSCallback` implementation |
+| `simulation/request.py` | `Request`, `RequestState`, and `Action` |
+| `simulation/hardware.py` | `HardwareConfig` and `KVCacheManager` |
+| `simulation/profile.py` | Prefill/decode timing and service estimation |
+| `simulation/callback.py` | Canonical scheduler snapshots, decisions, transitions, and lifecycle events |
+| `simulation/engine.py` | `TriageKernel`, `simulate()`, and `SimulatorExecutor` |
+| `simulation/baselines.py` | Reference `FCFSCallback` implementation |
 
 ## Execution Model
 
