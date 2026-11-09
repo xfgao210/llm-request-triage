@@ -81,6 +81,19 @@ class SchedulingTests(unittest.TestCase):
         self.assertIs(by_id["urgent"].state, RequestState.DROPPED)
         self.assertIs(by_id["feasible"].state, RequestState.COMPLETED)
 
+    def test_capacity_wait_does_not_spend_slo_aware_defer_budget(self) -> None:
+        result = simulate(
+            [_request("resident", 32, 1), _request("big", 48, 2), _request("small", 16, 3)],
+            StaticSLOAwareScheduler(),
+            HardwareConfig(max_batch_size=2, kv_block_size=16, kv_total_blocks=4),
+            PROFILE,
+            estimated_output_tokens=1,
+            max_defers=1,
+        )
+        self.assertEqual(len(result.completed), 3)
+        self.assertEqual(result.by_id()["big"].defer_count, 0)
+        self.assertGreater(result.by_id()["big"].admit_time, 0)
+
     def test_baseline_registry_uses_canonical_callbacks(self) -> None:
         self.assertEqual(
             list(baseline_schedulers()),

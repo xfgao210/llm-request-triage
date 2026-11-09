@@ -19,4 +19,4 @@ class StaticSLOAwareScheduler:
     def decide(self, snapshot: SimState) -> Action:
         if snapshot.candidate.estimated_slack_s(snapshot.now_s) < 0:
             return Action.DROP
-        return Action.ADMIT if snapshot.candidate_fits() else Action.DEFER
+        return Action.ADMIT
