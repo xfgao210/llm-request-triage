@@ -226,6 +226,26 @@ class LifecycleEvent:
 
 
 @dataclass(frozen=True)
+class RequestOutcome:
+    """Terminal outcome of a single request emitted during a :class:`Transition`.
+
+    Surfaces realized service and SLO outcome fields needed by
+    :class:`~llm_triage.rl.rewards.RewardModel` implementations without
+    requiring private access to :class:`~llm_triage.simulation.TriageKernel`.
+    """
+
+    request_id: Union[int, str]
+    state: RequestState
+    slo_met: bool
+    arrival_time_s: float
+    deadline_s: float
+    completion_time_s: float
+    gpu_time_s: float = 0.0
+    defer_count: int = 0
+    preemption_count: int = 0
+
+
+@dataclass(frozen=True)
 class Transition:
     """Result of applying one scheduling decision to :class:`TriageKernel`."""
 
@@ -234,6 +254,12 @@ class Transition:
     now_s: float
     events: Tuple[LifecycleEvent, ...]
     done: bool
+    outcomes: Tuple[RequestOutcome, ...] = ()
+    slo_attainment: float = 0.0
+    total_requests: int = 0
+    completed_count: int = 0
+    violated_count: int = 0
+    dropped_count: int = 0
 
 
 # ---------------------------------------------------------------------------
