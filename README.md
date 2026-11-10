@@ -43,6 +43,19 @@ The command trains three Double-DQN seeds on the shared simulator and compares
 their selected checkpoints with the deterministic baselines. See the
 [Week 2 results and replay commands](results/week2/README.md).
 
+## Reproduce the Week 3 holdout
+
+From this checkout with Python 3.12:
+
+```bash
+python -m pip install -e ".[rl]" gymnasium==1.4.0 numpy==2.5.4
+python -m experiments.reproduce_week3
+```
+
+The second command prepares BurstGPT, rebuilds the three validation-selected
+checkpoints, checks their hashes, and runs the paired test comparison. See
+[the Week 3 results](results/week3/README.md) for the replay settings and output files.
+
 ## Components
 
 - [Workload pipeline and original Week 1 handoff](docs/week1-hengyi.md).
