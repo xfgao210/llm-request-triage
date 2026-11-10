@@ -5,7 +5,7 @@ simulation, and lifecycle-based evaluation.
 
 ## Run
 
-Python 3.11+; runtime uses only the standard library. Run from the repository root:
+Python 3.11+. Baseline runs use the standard library. Run from the repository root:
 
 ```bash
 python -m pip install -e ".[dev]"
@@ -29,6 +29,19 @@ See [integration instructions](docs/week1-integration.md) and the
 [retained results](results/week1-integrated/REPORT.md).
 An additional [artificial KV stress scenario](results/week1-integrated-kv-stress/REPORT.md)
 exercises capacity pressure and preemption on the same validation cohort.
+
+## Train the Week 2 agent
+
+After preparing BurstGPT, install the RL dependencies and start a CPU run:
+
+```bash
+python -m pip install -e ".[dev,rl]"
+python experiments/train_dqn.py
+```
+
+The command trains three Double-DQN seeds on the shared simulator and compares
+their selected checkpoints with the deterministic baselines. See the
+[Week 2 results and replay commands](results/week2/README.md).
 
 ## Components
 

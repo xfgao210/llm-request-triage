@@ -17,4 +17,5 @@ class LengthAwareScheduler:
         )
 
     def decide(self, snapshot: SimState) -> Action:
-        return Action.ADMIT if snapshot.candidate_fits() else Action.DEFER
+        # A blocked admission waits for capacity in the kernel.
+        return Action.ADMIT

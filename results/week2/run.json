@@ -1,0 +1,105 @@
+{
+  "actions": [
+    "admit",
+    "defer",
+    "drop"
+  ],
+  "batch_size": 64,
+  "checkpoints": [
+    {
+      "episode": 24,
+      "seed": 7,
+      "sha256": "5bc871a532585e3918ab67b9ad5c7a3dc13b0ab78b13de4c07c3ee32c8eca5f6",
+      "validation_attainment": 0.810302734375
+    },
+    {
+      "episode": 8,
+      "seed": 17,
+      "sha256": "bdaae536ea0761169776245e09ad4fd869622cce2dfc02535065dbcc5ea9b27b",
+      "validation_attainment": 0.83984375
+    },
+    {
+      "episode": 16,
+      "seed": 27,
+      "sha256": "12524dc4fb202afe39e3680aa106acb4b8231a3996ba771d61bfa2d15fe089bc",
+      "validation_attainment": 0.8369140625
+    }
+  ],
+  "config": {
+    "decisions": {
+      "defer_retry_s": 0.25,
+      "max_defers": 5
+    },
+    "episodes": 24,
+    "hardware": {
+      "gpu_name": "RTX-5070-12GB/Qwen2.5-0.5B",
+      "kv_block_size": 16,
+      "kv_total_blocks": 48059,
+      "max_batch_size": 32
+    },
+    "reward": {},
+    "seeds": [
+      7,
+      17,
+      27
+    ],
+    "slo_s": 5.0,
+    "target_rps": [
+      1.2,
+      2.4
+    ],
+    "validate_every": 8
+  },
+  "estimated_output_tokens": 109.6070556640625,
+  "features": [
+    "candidate_slack_ratio",
+    "candidate_estimated_slack_ratio",
+    "candidate_estimated_service_ratio",
+    "candidate_input_tokens_log",
+    "candidate_wait_ratio",
+    "candidate_defer_ratio",
+    "candidate_fits",
+    "queue_length_log",
+    "queue_min_slack_ratio",
+    "queue_mean_slack_ratio",
+    "batch_utilization",
+    "kv_cache_utilization",
+    "prefill_utilization",
+    "decode_utilization",
+    "episode_progress"
+  ],
+  "gymnasium": "1.4.0",
+  "manifest_sha256": "a90bf7724176790cb6847315e4c4b3a4db003bc9eab6a090f756990b08232977",
+  "numpy": "2.5.4",
+  "replay_capacity": 50000,
+  "reward_config": {
+    "defer_per_second": 0.02,
+    "drop": 0.05,
+    "invalid_action_penalty": 0.1,
+    "late": 0.1,
+    "success": 1.0,
+    "terminal_attainment": 1.0,
+    "wasted_service": 0.2
+  },
+  "reward_model": "llm_triage.rl.rewards.AsymmetricRewardModel",
+  "selection_split": "validation",
+  "service_profile": {
+    "contention_factor": 0.5,
+    "contention_ref_batch": 32,
+    "decode_context_s": 4.057988306430102e-08,
+    "decode_rate": 35.849389110100596,
+    "default_estimated_output_tokens": 144.0,
+    "prefill_overhead_s": 0.025490567869413613,
+    "prefill_quadratic_s": 3.183762086121867e-08,
+    "prefill_rate": null,
+    "provenance": "measured RTX 5070 / Qwen2.5-0.5B batch=1 + assumed batch contention"
+  },
+  "source_sha256": "46fc9480ef0b748ecb2b51d512ff08c196b031782cbe6f78e28044d768e86d5a",
+  "test_evaluated": false,
+  "trace_sha256": "d76a69b0fe6f21b6d9f975631d78a85c03cf2244554252605f11a6d6dc25e44c",
+  "train_windows": 32,
+  "update_interval": 4,
+  "validation_runs": 96,
+  "validation_windows": 8,
+  "warmup": 256
+}
