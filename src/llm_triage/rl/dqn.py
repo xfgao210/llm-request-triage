@@ -4,7 +4,8 @@ import json
 
 import numpy as np
 
-from .environment import ACTIONS, FEATURES
+from .environment import ACTIONS
+from .observation import FULL_FEATURE_NAMES as FEATURES
 
 
 class DQN:

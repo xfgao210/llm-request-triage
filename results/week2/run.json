@@ -7,22 +7,22 @@
   "batch_size": 64,
   "checkpoints": [
     {
-      "episode": 8,
+      "episode": 24,
       "seed": 7,
-      "sha256": "cc7a3a2af2e52e5e9dfceeb403d0e69baed31950581f38e6cec167399c519df1",
-      "validation_attainment": 0.8349609375
+      "sha256": "5bc871a532585e3918ab67b9ad5c7a3dc13b0ab78b13de4c07c3ee32c8eca5f6",
+      "validation_attainment": 0.810302734375
     },
     {
       "episode": 8,
       "seed": 17,
-      "sha256": "3d35517bcc889d68ed745b38341851e99a1dce7e0acabe361c6299bc8baedaf5",
-      "validation_attainment": 0.834716796875
+      "sha256": "bdaae536ea0761169776245e09ad4fd869622cce2dfc02535065dbcc5ea9b27b",
+      "validation_attainment": 0.83984375
     },
     {
-      "episode": 8,
+      "episode": 16,
       "seed": 27,
-      "sha256": "d9d5bf964fb5d9cf2ad9e9c789bd3b7a6d0f95e02775c3fb6cb3e29222b32336",
-      "validation_attainment": 0.84033203125
+      "sha256": "12524dc4fb202afe39e3680aa106acb4b8231a3996ba771d61bfa2d15fe089bc",
+      "validation_attainment": 0.8369140625
     }
   ],
   "config": {
@@ -37,15 +37,7 @@
       "kv_total_blocks": 48059,
       "max_batch_size": 32
     },
-    "reward": {
-      "defer": -0.02,
-      "drop": -0.2,
-      "late": -0.4,
-      "on_time": 1.0,
-      "terminal_attainment": 1.0,
-      "unfinished": -0.4,
-      "wasted_gpu_fraction": 0.2
-    },
+    "reward": {},
     "seeds": [
       7,
       17,
@@ -60,20 +52,36 @@
   },
   "estimated_output_tokens": 109.6070556640625,
   "features": [
-    "remaining_slo",
-    "estimated_service",
-    "input_length",
-    "eligible_queue",
-    "estimated_output",
-    "episode_progress",
-    "defer_fraction",
+    "candidate_slack_ratio",
+    "candidate_estimated_slack_ratio",
+    "candidate_estimated_service_ratio",
+    "candidate_input_tokens_log",
+    "candidate_wait_ratio",
+    "candidate_defer_ratio",
+    "candidate_fits",
+    "queue_length_log",
+    "queue_min_slack_ratio",
+    "queue_mean_slack_ratio",
     "batch_utilization",
-    "kv_utilization"
+    "kv_cache_utilization",
+    "prefill_utilization",
+    "decode_utilization",
+    "episode_progress"
   ],
   "gymnasium": "1.4.0",
   "manifest_sha256": "a90bf7724176790cb6847315e4c4b3a4db003bc9eab6a090f756990b08232977",
   "numpy": "2.5.4",
   "replay_capacity": 50000,
+  "reward_config": {
+    "defer_per_second": 0.02,
+    "drop": 0.05,
+    "invalid_action_penalty": 0.1,
+    "late": 0.1,
+    "success": 1.0,
+    "terminal_attainment": 1.0,
+    "wasted_service": 0.2
+  },
+  "reward_model": "llm_triage.rl.rewards.AsymmetricRewardModel",
   "selection_split": "validation",
   "service_profile": {
     "contention_factor": 0.5,

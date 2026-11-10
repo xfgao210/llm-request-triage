@@ -12,8 +12,9 @@ import gymnasium
 import numpy as np
 
 from llm_triage.evaluation import EvaluationConfig, evaluate_policy_matrix
+from llm_triage.rl import ACTIONS, FULL_FEATURE_NAMES, ActionMaskConfig, ObservationConfig
+from llm_triage.rl import RewardConfig, RLPolicyCallback, TriageEnv
 from llm_triage.rl.dqn import DQN, ReplayBuffer
-from llm_triage.rl.environment import ACTIONS, FEATURES, DecisionConfig, GreedyScheduler, RewardConfig, TriageEnv
 from llm_triage.scheduling import baseline_schedulers
 from llm_triage.simulation import HardwareConfig, ServiceProfile, SimulatorExecutor
 from llm_triage.workload.burstgpt import load_windows, sha256
@@ -68,16 +69,30 @@ def load_cohorts(processed_dir, config):
     }
 
 
+def policy_options(replay, decisions):
+    return dict(
+        observation_config=ObservationConfig(
+            preset="full", horizon_s=replay.horizon_s, max_defers=decisions["max_defers"],
+        ),
+        # Reaching the kernel limit expires the request, so mask that final defer.
+        mask_config=ActionMaskConfig(
+            max_defers=decisions["max_defers"] - 1, defer_retry_s=decisions["defer_retry_s"],
+        ),
+        invalid_action_mode="raise",
+    )
+
+
 def evaluate(models, cases, hardware, profile, estimate, decisions, *, baselines=False):
     rows = []
     for window, rate, replay in cases:
         policies = baseline_schedulers() if baselines else {}
         policies.update({
-            name: GreedyScheduler(model, replay.horizon_s, decisions) for name, model in models.items()
+            name: RLPolicyCallback(model, **policy_options(replay, decisions))
+            for name, model in models.items()
         })
         executor = SimulatorExecutor(
             replay.requests, hardware, profile, estimated_output_tokens=estimate,
-            defer_retry_s=decisions.defer_retry_s, max_defers=decisions.max_defers,
+            **decisions,
         )
         results = evaluate_policy_matrix(
             policies, executor, EvaluationConfig(measurement_window_s=replay.horizon_s)
@@ -114,9 +129,12 @@ def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, re
     validate(0)
     for episode in range(1, config["episodes"] + 1):
         window, rate, replay = rng.choice(cohorts["train"])
-        env = TriageEnv(replay, hardware, profile, estimate, decisions, reward)
+        env = TriageEnv(
+            replay, hardware, profile, estimated_output_tokens=estimate, reward_config=reward,
+            **decisions, **policy_options(replay, decisions),
+        )
         state, info = env.reset(seed=seed)
-        if info["terminal_on_reset"]:
+        if info["is_terminal"]:
             raise ValueError(f"Training window {window} has no runnable decision")
         epsilon = max(0.05, 1 - (episode - 1) / max(1, 0.8 * config["episodes"]))
         losses = []
@@ -135,7 +153,8 @@ def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, re
                 losses.append(model.train_batch(replay_buffer.sample(BATCH_SIZE)))
         history.append(dict(seed=seed, episode=episode, window=window, target_rps=rate, steps=total_steps,
                             updates=model.updates, reward=episode_reward, loss=fmean(losses) if losses else None,
-                            train_attainment=info["metrics"]["slo_attainment"], train_drop_rate=info["metrics"]["drop_rate"]))
+                            train_attainment=info["episode_metrics"]["slo_attainment"],
+                            train_drop_rate=info["episode_metrics"]["drop_rate"]))
         if episode % config["validate_every"] == 0 or episode == config["episodes"]:
             score = validate(episode)
             if model.updates and selection[-1]["max_weight_change"] > 0 and score > best_score:
@@ -165,10 +184,12 @@ def run(config, processed_dir, output, checkpoint=None):
     cohorts, estimate, provenance = load_cohorts(processed_dir, config)
     hardware = HardwareConfig(**config["hardware"])
     profile = ServiceProfile()
-    decisions = DecisionConfig(**config["decisions"])
+    decisions = config["decisions"]
     reward = RewardConfig(**config["reward"])
-    metadata = dict(config=config, **provenance, features=list(FEATURES), actions=[a.value for a in ACTIONS],
-                    estimated_output_tokens=estimate, service_profile=vars(profile))
+    metadata = dict(config=config, **provenance, features=list(FULL_FEATURE_NAMES),
+                    actions=[a.value for a in ACTIONS], estimated_output_tokens=estimate,
+                    service_profile=vars(profile), reward_config=vars(reward),
+                    reward_model="llm_triage.rl.rewards.AsymmetricRewardModel")
     models, history, selection, checkpoints = {}, [], [], []
     if checkpoint is not None:
         model, saved = DQN.load(checkpoint)

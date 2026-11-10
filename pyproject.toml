@@ -11,7 +11,7 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
-rl = ["gymnasium>=1.0,<2", "numpy>=1.26,<3"]
+rl = ["gymnasium>=0.29", "numpy>=1.24"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

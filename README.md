@@ -48,6 +48,10 @@ their selected checkpoints with the deterministic baselines. See the
 - [Workload pipeline and original Week 1 handoff](docs/week1-hengyi.md).
 - [Simulator architecture](docs/simulator.md): continuous batching, paged
   KV-cache allocation, recompute preemption, and a steppable kernel.
+- [RL environment wrapper](docs/rl_environment.md): Gymnasium-compatible
+  `TriageEnv` around `TriageKernel`, normalized observation builder with strict
+  output-length masking, action feasibility masking (`ADMIT`, `DEFER`, `DROP`),
+  configurable invalid-action handling, and `RLPolicyCallback` evaluation adapter.
 - [Metrics](docs/metrics.md) and [simulator integration contract](docs/simulator_integration.md).
 - [Technical design](TECH_DESIGN.md).
 
@@ -59,7 +63,7 @@ smoke workloads now run through the shared simulator. Use
 
 ## Contributions
 
-- Vikas Chelur: core simulator architecture and resource management.
+- Vikas Chelur: core simulator architecture, resource management, and Week 2 RL environment wrapper.
 - Xiaofei Gao: evaluation engine, advanced baseline schedulers, and visualization workflow.
 - Hengyi Yin: BurstGPT pipeline, FCFS, GPU calibration, and integration/reproduction.
   See the [initial contribution report](contributions/hengyi/REPORT.md).

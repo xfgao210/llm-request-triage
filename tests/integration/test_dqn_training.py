@@ -10,17 +10,19 @@ np = pytest.importorskip("numpy")
 
 from gymnasium.utils.env_checker import check_env
 
-from experiments.train_dqn import run
-from llm_triage.rl.environment import DecisionConfig, GreedyScheduler, RewardConfig, TriageEnv
+from experiments.train_dqn import policy_options, run
+from llm_triage.rl import RLPolicyCallback, TriageEnv
 from llm_triage.simulation import EventType, HardwareConfig, Request, ServiceProfile, simulate
 from llm_triage.workload.burstgpt import sha256
 from llm_triage.workload.transforms import ReplayWindow
 
 
-def make_env(requests, hardware=None, decisions=DecisionConfig(0.25, 5)):
+def make_env(requests, hardware=None, max_defers=5):
+    replay = ReplayWindow(tuple(requests), 3.0, 0.0, 1.0)
+    decisions = dict(defer_retry_s=0.25, max_defers=max_defers)
     return TriageEnv(
-        ReplayWindow(tuple(requests), 3.0, 0.0, 1.0), hardware or HardwareConfig(),
-        ServiceProfile(), 8, decisions, RewardConfig(),
+        replay, hardware or HardwareConfig(), ServiceProfile(), estimated_output_tokens=8,
+        **decisions, **policy_options(replay, decisions),
     )
 
 
@@ -36,48 +38,52 @@ def test_gymnasium_and_observation_hides_current_and_future_truth():
 
 
 def test_defer_mask_blocks_terminal_defer_and_drop_all_is_penalized():
-    env = make_env([Request("a", 0, 16, 1, 2)], decisions=DecisionConfig(0.25, 2))
+    env = make_env([Request("a", 0, 16, 1, 2)], max_defers=2)
     _, info = env.reset()
     assert info["action_mask"].tolist() == [True, True, True]
     _, defer_reward, done, _, info = env.step(1)
-    assert not done and env.snapshot.now_s == pytest.approx(0.25)
+    assert not done and env.snapshot().now_s == pytest.approx(0.25)
     assert info["action_mask"].tolist() == [True, False, True]
-    with pytest.raises(ValueError, match="Invalid action"):
+    with pytest.raises(ValueError, match="masked action"):
         env.step(1)
     _, drop_reward, done, truncated, info = env.step(2)
     assert done and not truncated and not info["action_mask"].any()
     assert defer_reward + drop_reward < 0
-    assert info["metrics"]["slo_attainment"] == 0
-    assert info["metrics"]["drop_rate"] == 1
+    assert info["episode_metrics"]["slo_attainment"] == 0
+    assert info["episode_metrics"]["drop_rate"] == 1
 
 
-def test_training_and_greedy_scheduler_handle_capacity_wait_the_same_way():
+def test_training_and_greedy_callback_share_mask_and_observations():
     requests = [Request("resident", 0, 32, 1, 1), Request("big", 0, 48, 1, 2),
                 Request("small", 0, 16, 1, 3)]
     hardware = HardwareConfig(max_batch_size=2, kv_block_size=16, kv_total_blocks=4)
-    decisions = DecisionConfig(0.25, 1)
-    env = make_env(requests, hardware, decisions)
-    env.reset()
+    decisions = dict(defer_retry_s=0.25, max_defers=2)
+    replay = ReplayWindow(tuple(requests), 3.0, 0.0, 1.0)
+    env = make_env(requests, hardware, max_defers=2)
+    seen = []
+
+    def choose(obs, mask):
+        seen.append((obs.copy(), mask.copy()))
+        return int(np.flatnonzero(mask)[0])
+
+    obs, info = env.reset()
     done = False
     while not done:
-        _, _, done, _, info = env.step(0)
-    assert info["metrics"]["completed"] == 3
-
-    class AlwaysAdmit:
-        def act(self, observation, mask):
-            assert mask[0]
-            return 0
-
-    scheduler = GreedyScheduler(AlwaysAdmit(), env.replay.horizon_s, decisions)
-    result = simulate(requests, scheduler, hardware, estimated_output_tokens=8,
-                      defer_retry_s=decisions.defer_retry_s, max_defers=decisions.max_defers)
-
-    def decisions_in(events):
-        return [(e.request_id, e.timestamp_s, e.details["action"]) for e in events
-                if e.event_type is EventType.DECISION]
-
-    assert decisions_in(env.kernel.events()) == decisions_in(result.events)
-    assert all(request.defer_count == 0 for request in result.requests)
+        obs, _, done, _, info = env.step(choose(obs, info["action_mask"]))
+    training_inputs = seen[:]
+    assert any(not mask[0] for _, mask in training_inputs)
+    seen.clear()
+    callback = RLPolicyCallback(choose, **policy_options(replay, decisions))
+    result = simulate(requests, callback, hardware, estimated_output_tokens=8, **decisions)
+    assert len(training_inputs) == len(seen)
+    for (train_obs, train_mask), (eval_obs, eval_mask) in zip(training_inputs, seen):
+        np.testing.assert_array_equal(train_obs, eval_obs)
+        np.testing.assert_array_equal(train_mask, eval_mask)
+    assert [(e.request_id, e.timestamp_s, e.details["action"]) for e in env.events()
+            if e.event_type is EventType.DECISION] == [
+        (e.request_id, e.timestamp_s, e.details["action"]) for e in result.events
+        if e.event_type is EventType.DECISION
+    ]
 
 
 def test_train_updates_weights_and_checkpoint_replays_same_validation(tmp_path):

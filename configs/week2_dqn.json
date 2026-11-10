@@ -1,8 +1,15 @@
 {
-  "seeds": [7, 17, 27],
+  "seeds": [
+    7,
+    17,
+    27
+  ],
   "episodes": 24,
   "validate_every": 8,
-  "target_rps": [1.2, 2.4],
+  "target_rps": [
+    1.2,
+    2.4
+  ],
   "slo_s": 5.0,
   "hardware": {
     "gpu_name": "RTX-5070-12GB/Qwen2.5-0.5B",
@@ -10,14 +17,9 @@
     "kv_block_size": 16,
     "kv_total_blocks": 48059
   },
-  "decisions": {"defer_retry_s": 0.25, "max_defers": 5},
-  "reward": {
-    "on_time": 1.0,
-    "late": -0.4,
-    "drop": -0.2,
-    "defer": -0.02,
-    "unfinished": -0.4,
-    "terminal_attainment": 1.0,
-    "wasted_gpu_fraction": 0.2
-  }
+  "decisions": {
+    "defer_retry_s": 0.25,
+    "max_defers": 5
+  },
+  "reward": {}
 }
