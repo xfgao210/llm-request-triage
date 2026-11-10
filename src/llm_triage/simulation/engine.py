@@ -41,6 +41,7 @@ from .callback import (
     Decision,
     EventType,
     LifecycleEvent,
+    RequestOutcome,
     RequestView,
     SchedulerCallback,
     SimState,
@@ -224,6 +225,7 @@ class TriageKernel:
         self.preempted_count: int = 0
         self.iterations: List[IterationRecord] = []
         self._events: List[LifecycleEvent] = []
+        self._outcomes: List[RequestOutcome] = []
         self._emitted_service_start: Set[Union[int, str]] = set()
         self._emitted_first_token: Set[Union[int, str]] = set()
 
@@ -263,6 +265,7 @@ class TriageKernel:
         self.preempted_count = 0
         self.iterations = []
         self._events = []
+        self._outcomes = []
         self._emitted_service_start = set()
         self._emitted_first_token = set()
 
@@ -320,6 +323,7 @@ class TriageKernel:
 
         prev_now = self.now
         event_start_idx = len(self._events)
+        outcome_start_idx = len(self._outcomes)
 
         if isinstance(decision, Decision):
             target_id = decision.request_id
@@ -378,12 +382,21 @@ class TriageKernel:
 
         self._advance_until_decision_or_done()
         new_events = tuple(self._events[event_start_idx:])
+        new_outcomes = tuple(self._outcomes[outcome_start_idx:])
+        total_reqs = len(self.requests)
+        attainment = self.completed_count / total_reqs if total_reqs > 0 else 0.0
         return Transition(
             decision=resolved_decision,
             previous_time_s=prev_now,
             now_s=self.now,
             events=new_events,
             done=self._episode_ended,
+            outcomes=new_outcomes,
+            slo_attainment=attainment,
+            total_requests=total_reqs,
+            completed_count=self.completed_count,
+            violated_count=self.violated_count,
+            dropped_count=self.dropped_count,
         )
 
     def result(self) -> SimResult:
@@ -445,6 +458,19 @@ class TriageKernel:
             self.violated_count += 1
         else:
             self.dropped_count += 1
+        self._outcomes.append(
+            RequestOutcome(
+                request_id=req.request_id,
+                state=state,
+                slo_met=state is RequestState.COMPLETED,
+                arrival_time_s=req.arrival_time,
+                deadline_s=req.slo_deadline,
+                completion_time_s=self.now,
+                gpu_time_s=req.gpu_time_s,
+                defer_count=req.defer_count,
+                preemption_count=req.preemption_count,
+            )
+        )
 
     def _finish_served(self, req: Request) -> None:
         self._preempted_count_before_completion = 0
@@ -454,6 +480,10 @@ class TriageKernel:
             EventType.COMPLETION,
             req.request_id,
             queue_length=len(self.queue) + len(self._preempted_queue),
+            slo_met=ok,
+            gpu_time_s=req.gpu_time_s,
+            arrival_time_s=req.arrival_time,
+            deadline_s=req.slo_deadline,
         )
 
     def _estimate_service_s(self, input_tokens: int) -> float:
