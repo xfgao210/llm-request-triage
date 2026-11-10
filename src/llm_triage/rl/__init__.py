@@ -30,6 +30,7 @@ from .observation import (
 )
 from .rewards import (
     AsymmetricRewardModel,
+    RewardBreakdown,
     RewardConfig,
     RewardModel,
 )
@@ -49,6 +50,7 @@ __all__ = [
     "ObservationPreset",
     "RLPolicyCallback",
     "RequestOutcome",
+    "RewardBreakdown",
     "RewardConfig",
     "RewardModel",
     "Transition",

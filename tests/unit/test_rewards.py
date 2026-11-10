@@ -6,235 +6,180 @@ import unittest
 
 from llm_triage.rl import (
     AsymmetricRewardModel,
-    EpisodeOutcome,
-    KernelRewardAdapter,
+    RewardBreakdown,
     RewardConfig,
-    RewardEvent,
     RewardModel,
-    RewardTransition,
 )
-from llm_triage.simulation import Action, Request, TriageKernel
+from llm_triage.simulation import (
+    Action,
+    HardwareConfig,
+    Request,
+    ServiceProfile,
+    TriageKernel,
+)
+
+
+PROFILE = ServiceProfile(
+    prefill_overhead_s=0.001,
+    prefill_rate=None,
+    prefill_quadratic_s=0.0,
+    decode_rate=1000.0,
+    decode_context_s=0.0,
+    contention_factor=0.0,
+)
+HARDWARE = HardwareConfig(max_batch_size=4, kv_block_size=16, kv_total_blocks=64)
+
+
+def request(request_id: str, *, output_tokens: int = 1, slo_s: float = 1.0) -> Request:
+    return Request(request_id, 0.0, 16, output_tokens, slo_s)
 
 
 class RewardModelTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.model = AsymmetricRewardModel()
-
-    def test_intended_transition_ordering(self) -> None:
-        on_time = self.model.transition_reward(
-            RewardTransition(RewardEvent.ON_TIME_COMPLETION)
+    def _episode(
+        self,
+        requests: list[Request],
+        *,
+        defer_retry_s: float = 0.01,
+        max_defers: int = 64,
+        profile: ServiceProfile = PROFILE,
+        config: RewardConfig | None = None,
+    ) -> tuple[TriageKernel, AsymmetricRewardModel]:
+        kernel = TriageKernel(
+            hardware=HARDWARE,
+            profile=profile,
+            defer_retry_s=defer_retry_s,
+            max_defers=max_defers,
         )
-        dropped = self.model.transition_reward(
-            RewardTransition(RewardEvent.DROP)
+        kernel.reset(requests)
+        model = AsymmetricRewardModel(config, defer_retry_s=defer_retry_s)
+        model.bind(kernel, defer_retry_s=defer_retry_s)
+        return kernel, model
+
+    def test_model_implements_environment_protocol(self) -> None:
+        self.assertIsInstance(AsymmetricRewardModel(), RewardModel)
+
+    def test_on_time_completion_includes_terminal_objectives(self) -> None:
+        kernel, model = self._episode([request("on-time")])
+
+        reward = model.reward_breakdown(kernel.apply(Action.ADMIT))
+
+        self.assertEqual(reward.success, 1.0)
+        self.assertEqual(reward.terminal_attainment, 1.0)
+        self.assertEqual(reward.terminal_completion, 0.5)
+        self.assertEqual(reward.total, 2.5)
+
+    def test_late_completion_uses_attributed_gpu_time(self) -> None:
+        kernel, model = self._episode(
+            [request("late", output_tokens=4, slo_s=0.002)]
         )
-        late = self.model.transition_reward(
-            RewardTransition(
-                RewardEvent.LATE_COMPLETION,
-                service_time_s=2.0,
-                request_slo_s=5.0,
-            )
-        )
-
-        self.assertGreater(on_time.total, dropped.total)
-        self.assertGreater(dropped.total, late.total)
-
-    def test_more_wasted_service_receives_larger_penalty(self) -> None:
-        short_waste = self.model.transition_reward(
-            RewardTransition(
-                RewardEvent.LATE_COMPLETION,
-                service_time_s=1.0,
-                request_slo_s=5.0,
-            )
-        )
-        long_waste = self.model.transition_reward(
-            RewardTransition(
-                RewardEvent.LATE_COMPLETION,
-                service_time_s=4.0,
-                request_slo_s=5.0,
-            )
-        )
-
-        self.assertLess(long_waste.wasted_service, short_waste.wasted_service)
-        self.assertLess(long_waste.total, short_waste.total)
-
-    def test_defer_cost_accumulates_by_duration(self) -> None:
-        first = self.model.transition_reward(
-            RewardTransition(RewardEvent.DEFER, defer_duration_s=0.25)
-        )
-        second = self.model.transition_reward(
-            RewardTransition(RewardEvent.DEFER, defer_duration_s=0.75)
-        )
-        combined = first + second
-        one_second = self.model.transition_reward(
-            RewardTransition(RewardEvent.DEFER, defer_duration_s=1.0)
-        )
-
-        self.assertAlmostEqual(combined.defer, one_second.defer)
-        self.assertAlmostEqual(combined.total, -0.02)
-
-    def test_drop_all_episode_is_worse_than_serving_requests(self) -> None:
-        drop_all = self.model.episode_reward(
-            EpisodeOutcome(
-                arrivals=10,
-                completed=0,
-                slo_met=0,
-                dropped=10,
-                unfinished=0,
-                duration_s=10.0,
-            )
-        )
-        useful = self.model.episode_reward(
-            EpisodeOutcome(
-                arrivals=10,
-                completed=8,
-                slo_met=7,
-                dropped=2,
-                unfinished=0,
-                duration_s=10.0,
-            )
-        )
-
-        self.assertEqual(drop_all.terminal_drop_all, -2.0)
-        self.assertLess(drop_all.total, useful.total)
-        self.assertGreater(useful.terminal_completion_fraction, 0.0)
-
-    def test_unfinished_work_reduces_terminal_reward(self) -> None:
-        complete = self.model.episode_reward(
-            EpisodeOutcome(10, 10, 5, 0, 0, 10.0)
-        )
-        unfinished = self.model.episode_reward(
-            EpisodeOutcome(10, 5, 5, 0, 5, 10.0)
-        )
-
-        self.assertLess(unfinished.total, complete.total)
-
-    def test_empty_episode_has_zero_terminal_reward(self) -> None:
-        reward = self.model.episode_reward(
-            EpisodeOutcome(0, 0, 0, 0, 0, 10.0)
-        )
-
-        self.assertEqual(reward.total, 0.0)
-
-    def test_zero_duration_episode_has_safe_rate_diagnostics(self) -> None:
-        outcome = EpisodeOutcome(1, 0, 0, 1, 0, 0.0)
-
-        self.assertEqual(outcome.throughput_rps, 0.0)
-        self.assertEqual(outcome.goodput_rps, 0.0)
-
-    def test_breakdown_reports_components_and_total(self) -> None:
-        reward = self.model.transition_reward(
-            RewardTransition(
-                RewardEvent.LATE_COMPLETION,
-                service_time_s=2.0,
-                request_slo_s=4.0,
-            )
-        )
-        components = reward.as_dict()
-
-        self.assertEqual(components["late_completion"], -1.0)
-        self.assertEqual(components["wasted_service"], -0.25)
-        self.assertEqual(components["total"], -1.25)
-
-    def test_transition_schema_excludes_future_and_hidden_truth(self) -> None:
-        visible_fields = {field.name for field in fields(RewardTransition)}
-
-        self.assertNotIn("true_output_tokens", visible_fields)
-        self.assertNotIn("future_arrivals", visible_fields)
-        self.assertNotIn("future_queue", visible_fields)
-
-    def test_transition_rejects_irrelevant_or_missing_fields(self) -> None:
-        with self.assertRaises(ValueError):
-            RewardTransition(RewardEvent.LATE_COMPLETION, service_time_s=1.0)
-        with self.assertRaises(ValueError):
-            RewardTransition(RewardEvent.DROP, service_time_s=1.0)
-        with self.assertRaises(ValueError):
-            RewardTransition(RewardEvent.DEFER, defer_duration_s=0.0)
-
-    def test_episode_rejects_inconsistent_counts(self) -> None:
-        with self.assertRaisesRegex(ValueError, "sum to arrivals"):
-            EpisodeOutcome(10, 5, 1, 2, 1, 10.0)
-        with self.assertRaisesRegex(ValueError, "cannot exceed"):
-            EpisodeOutcome(10, 5, 6, 5, 0, 10.0)
-
-    def test_reward_config_rejects_invalid_weights(self) -> None:
-        for invalid in (-1.0, math.inf, math.nan, True):
-            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
-                RewardConfig(drop_penalty=invalid)
-
-    def test_describe_returns_resolved_weights(self) -> None:
-        weights = self.model.describe()
-
-        self.assertEqual(weights["on_time_completion_reward"], 1.0)
-        self.assertEqual(weights["terminal_drop_all_penalty"], 2.0)
-
-
-class KernelRewardAdapterTests(unittest.TestCase):
-    def test_adapter_is_the_environment_reward_model(self) -> None:
-        adapter = KernelRewardAdapter()
-
-        self.assertIsInstance(adapter, RewardModel)
-        self.assertFalse(isinstance(AsymmetricRewardModel(), RewardModel))
-
-    def _reset(self, request: Request, **kernel_kwargs):
-        kernel = TriageKernel(**kernel_kwargs)
-        kernel.reset([request])
-        adapter = KernelRewardAdapter()
-        adapter.reset(kernel.events())
-        return kernel, adapter
-
-    def test_on_time_completion_and_terminal_objective(self) -> None:
-        kernel, adapter = self._reset(Request("r1", 0.0, 8, 1, 10.0))
 
         transition = kernel.apply(Action.ADMIT)
-        reward = adapter.reward_breakdown(transition)
+        reward = model.reward_breakdown(transition)
 
-        self.assertTrue(transition.done)
-        self.assertEqual(reward.on_time_completion, 1.0)
-        self.assertEqual(reward.terminal_slo_attainment, 1.0)
-        self.assertEqual(reward.terminal_completion_fraction, 0.5)
-        self.assertEqual(reward.total, 2.5)
-        self.assertEqual(adapter.outcome.slo_met, 1)
+        self.assertEqual(reward.late, -1.0)
+        self.assertAlmostEqual(transition.outcomes[0].gpu_time_s, 0.004)
+        self.assertAlmostEqual(reward.wasted_service, -1.0)
+        self.assertEqual(reward.terminal_completion, 0.5)
+        self.assertEqual(reward.terminal_attainment, 0.0)
 
-    def test_late_completion_penalizes_wasted_service(self) -> None:
-        kernel, adapter = self._reset(Request("late", 0.0, 8, 1, 0.001))
+    def test_drop_all_guardrail(self) -> None:
+        kernel, model = self._episode([request("drop")])
 
-        reward = adapter.reward_breakdown(kernel.apply(Action.ADMIT))
-
-        self.assertEqual(reward.late_completion, -1.0)
-        self.assertLess(reward.wasted_service, 0.0)
-        self.assertEqual(reward.terminal_slo_attainment, 0.0)
-        self.assertEqual(adapter.outcome.completed, 1)
-        self.assertEqual(adapter.outcome.slo_met, 0)
-
-    def test_drop_all_guardrail_handles_zero_duration_episode(self) -> None:
-        kernel, adapter = self._reset(Request("drop", 0.0, 8, 1, 5.0))
-
-        reward = adapter.reward_breakdown(kernel.apply(Action.DROP))
+        reward = model.reward_breakdown(kernel.apply(Action.DROP))
 
         self.assertEqual(reward.drop, -0.2)
         self.assertEqual(reward.terminal_drop_all, -2.0)
-        self.assertEqual(adapter.outcome.duration_s, 0.0)
-        self.assertEqual(adapter.outcome.dropped, 1)
+        self.assertEqual(reward.total, -2.2)
 
-    def test_defer_cost_uses_elapsed_simulation_time(self) -> None:
-        kernel, adapter = self._reset(
-            Request("defer", 0.0, 8, 1, 5.0), defer_retry_s=0.25
+    def test_unfinished_work_reduces_terminal_reward(self) -> None:
+        kernel, model = self._episode(
+            [request("defer-limit")], defer_retry_s=0.1, max_defers=1
         )
 
-        first = adapter.reward_breakdown(kernel.apply(Action.DEFER))
-        second = adapter.reward_breakdown(kernel.apply(Action.DROP))
+        reward = model.reward_breakdown(kernel.apply(Action.DEFER))
+
+        self.assertAlmostEqual(reward.defer, -0.002)
+        self.assertEqual(reward.late, -1.0)
+        self.assertEqual(reward.terminal_unfinished, -0.5)
+        self.assertEqual(reward.terminal_completion, 0.0)
+
+    def test_defer_is_charged_immediately_for_one_retry_interval(self) -> None:
+        slow_profile = ServiceProfile(
+            prefill_overhead_s=1.0,
+            prefill_rate=None,
+            prefill_quadratic_s=0.0,
+            decode_rate=1.0,
+            decode_context_s=0.0,
+            contention_factor=0.0,
+        )
+        kernel, model = self._episode(
+            [request("deferred", slo_s=10.0), request("served", slo_s=10.0)],
+            defer_retry_s=0.1,
+            profile=slow_profile,
+        )
+
+        defer_transition = kernel.apply(Action.DEFER)
+        defer_reward = model.reward_breakdown(defer_transition)
+        other_transition = kernel.apply(Action.ADMIT)
+        other_reward = model.reward_breakdown(other_transition)
+
+        self.assertEqual(defer_transition.now_s, 0.0)
+        self.assertAlmostEqual(defer_reward.defer, -0.002)
+        self.assertEqual(other_transition.now_s, 1.0)
+        self.assertEqual(other_reward.defer, 0.0)
+        self.assertEqual(kernel.snapshot().candidate.request_id, "deferred")
+
+    def test_repeated_defers_pay_one_bounded_cost_each(self) -> None:
+        kernel, model = self._episode(
+            [request("repeated", slo_s=10.0)], defer_retry_s=0.25
+        )
+
+        first = model.reward_breakdown(kernel.apply(Action.DEFER))
+        second = model.reward_breakdown(kernel.apply(Action.DEFER))
 
         self.assertAlmostEqual(first.defer, -0.005)
-        self.assertEqual(second.defer, 0.0)
-        self.assertEqual(second.drop, -0.2)
+        self.assertAlmostEqual(second.defer, -0.005)
+        self.assertAlmostEqual(model.cumulative_breakdown.defer, -0.01)
 
-    def test_adapter_rejects_reuse_after_terminal_transition(self) -> None:
-        kernel, adapter = self._reset(Request("done", 0.0, 8, 1, 5.0))
-        transition = kernel.apply(Action.DROP)
-        adapter.reward(transition)
+    def test_invalid_action_is_a_separate_component(self) -> None:
+        kernel, model = self._episode([request("invalid")])
 
-        with self.assertRaisesRegex(RuntimeError, "must be reset"):
-            adapter.reward(transition)
+        reward = model.reward_breakdown(
+            kernel.apply(Action.ADMIT), invalid_action=True
+        )
+
+        self.assertEqual(reward.invalid_action, -0.1)
+        self.assertEqual(reward.total, 2.4)
+
+    def test_breakdown_addition_and_serialization(self) -> None:
+        reward = RewardBreakdown(success=1.0) + RewardBreakdown(drop=-0.2)
+
+        self.assertEqual(reward.total, 0.8)
+        self.assertEqual(reward.as_dict()["total"], 0.8)
+
+    def test_config_rejects_invalid_weights(self) -> None:
+        for invalid in (-1.0, math.inf, math.nan, True):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                RewardConfig(drop=invalid)
+
+    def test_defer_retry_must_be_positive_and_finite(self) -> None:
+        for invalid in (0.0, -1.0, math.inf, math.nan):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                AsymmetricRewardModel(defer_retry_s=invalid)
+
+    def test_outcome_schema_excludes_true_output_length(self) -> None:
+        kernel, _ = self._episode([request("safe")])
+        transition = kernel.apply(Action.ADMIT)
+        visible_fields = {field.name for field in fields(transition.outcomes[0])}
+
+        self.assertNotIn("output_tokens", visible_fields)
+        self.assertNotIn("true_output_tokens", visible_fields)
+
+    def test_describe_returns_resolved_weights(self) -> None:
+        weights = AsymmetricRewardModel().describe()
+
+        self.assertEqual(weights["success"], 1.0)
+        self.assertEqual(weights["terminal_drop_all"], 2.0)
 
 
 if __name__ == "__main__":

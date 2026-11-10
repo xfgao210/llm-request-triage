@@ -54,7 +54,7 @@ The shared asymmetric reward model under `src/llm_triage/rl/` rewards on-time
 completion, penalizes late computation and proactive drops at different
 magnitudes, charges for deferral, and includes terminal completion and
 drop-all guardrails. RL environments consume the stable `RewardModel`
-interface, whose canonical implementation is `KernelRewardAdapter`; reward
+interface, whose canonical implementation is `AsymmetricRewardModel`; reward
 weights and formulas remain outside the environment. The formula, initial
 untuned weights, and information boundary are documented in
 [`docs/reward_design.md`](docs/reward_design.md).

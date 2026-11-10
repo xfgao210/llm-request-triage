@@ -734,6 +734,8 @@ class TriageEnv(_GymEnvBase):
             info["previous_time_s"] = transition.previous_time_s
             info["events"] = transition.events
             info["outcomes"] = transition.outcomes
+            if isinstance(self.reward_model, AsymmetricRewardModel):
+                info["reward_breakdown"] = self.reward_model.last_breakdown.as_dict()
             if transition.done:
                 info["episode_metrics"] = self.metrics()
         return info

@@ -297,7 +297,12 @@ class TestActionMaskingAndInvalidActionModes(unittest.TestCase):
         self.assertEqual(info["executed_action"], "admit")
         self.assertEqual(env.invalid_action_count, 1)
         # Completed on time (0.002s <= 0.05s) with no invalid_action_penalty in "fallback" mode
-        self.assertAlmostEqual(reward, env.reward_config.success + env.reward_config.terminal_attainment)
+        self.assertAlmostEqual(
+            reward,
+            env.reward_config.success
+            + env.reward_config.terminal_attainment
+            + env.reward_config.terminal_completion,
+        )
 
     def test_invalid_action_mode_penalize(self) -> None:
         reward_cfg = RewardConfig(success=1.0, terminal_attainment=1.0, invalid_action_penalty=0.25)
@@ -316,7 +321,10 @@ class TestActionMaskingAndInvalidActionModes(unittest.TestCase):
         self.assertEqual(info["executed_action"], "admit")
         self.assertAlmostEqual(
             reward,
-            reward_cfg.success + reward_cfg.terminal_attainment - reward_cfg.invalid_action_penalty,
+            reward_cfg.success
+            + reward_cfg.terminal_attainment
+            + reward_cfg.terminal_completion
+            - reward_cfg.invalid_action_penalty,
         )
 
 
@@ -518,7 +526,13 @@ class TestRewardsAndEpisodeLifecycle(unittest.TestCase):
         self.assertGreater(tr.outcomes[0].gpu_time_s, 0.0)
 
         standalone_rm = AsymmetricRewardModel(
-            RewardConfig(success=1.0, late=0.1, wasted_service=0.2, terminal_attainment=1.0)
+            RewardConfig(
+                success=1.0,
+                late=0.1,
+                wasted_service=0.2,
+                terminal_attainment=1.0,
+                terminal_completion=0.0,
+            )
         )
         r_val = standalone_rm.reward(tr)
         # Expected: -0.1 - 0.2 * (0.004 / 0.002) = -0.5 (and terminal attainment is 0.0)

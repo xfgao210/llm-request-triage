@@ -16,13 +16,13 @@ on-time completion:
 
 late completion:
     - late_penalty
-    - wasted_service_weight * (service_time / request_SLO_window)
+    - wasted_service_weight * (attributed_GPU_time / request_SLO_window)
 
 drop:
     - drop_penalty
 
 defer:
-    - defer_penalty_per_second * deferred_seconds
+    - defer_penalty_per_second * configured_retry_interval
 ```
 
 The initial weights guarantee the intended qualitative ordering for a typical
@@ -32,8 +32,14 @@ request:
 on-time completion > proactive drop > late completion with wasted compute
 ```
 
-Service waste is divided by the request's SLO window to keep its scale
+Attributed GPU time comes from the immutable request outcomes emitted by the
+simulator. It is divided by the request's SLO window to keep its scale
 comparable when requests have different deadline classes.
+
+The defer cost is charged immediately on the `DEFER` transition. It covers
+exactly one configured retry interval; later service, capacity, or queue waits
+cannot accumulate against the earlier action. Repeated explicit defer actions
+each incur one bounded cost.
 
 ## Terminal reward
 
@@ -41,12 +47,13 @@ After an episode:
 
 ```text
 + attainment_weight * (SLO-met requests / arrivals)
-+ completion_weight * (completed requests / arrivals)
++ completion_weight * (served requests / arrivals)
 - unfinished_weight * (unfinished requests / arrivals)
 - drop_all_penalty, if every arrival was dropped
 ```
 
-The completion-fraction term is an episode-normalized throughput guard. It
+The served-fraction term includes both on-time and late completions and is an
+episode-normalized throughput guard. It
 prevents improved conditional latency or attainment from hiding a policy that
 serves almost no work. Actual throughput and goodput in requests per second
 remain evaluation metrics and are logged separately.
@@ -105,27 +112,24 @@ policies before interpreting aggregate return.
 `reward(Transition) -> float` contract from `TECH_DESIGN.md`; the Gymnasium
 environment does not depend on reward formulas or event-accounting details.
 
-`KernelRewardAdapter` is the canonical `RewardModel` implementation. It
-composes `AsymmetricRewardModel`, which owns the pure asymmetric scoring
-formula, with the episode accounting required to consume canonical simulator
-transitions and lifecycle events. The environment integration is therefore:
+`AsymmetricRewardModel` is the canonical implementation. It consumes the
+immutable `RequestOutcome` objects included in canonical simulator transitions,
+including terminal state, SLO timestamps, and attributed GPU time. The
+environment integration is therefore:
 
 ```python
-reward_model: RewardModel = KernelRewardAdapter()
+reward_model: RewardModel = AsymmetricRewardModel(
+    config,
+    defer_retry_s=kernel.defer_retry_s,
+)
 kernel.reset(requests)
-reward_model.reset(kernel.events())
 
 transition = kernel.apply(action)
 reward = reward_model.reward(transition)
 ```
 
-The Gymnasium environment must call exactly one of `reward()` or
+The Gymnasium environment calls exactly one of `reward()` or
 `reward_breakdown()` for every transition returned by `TriageKernel.apply()`.
 It must not duplicate reward weights or formulas inside `step()`.
-
-The adapter reconstructs only outcome facts that have already been emitted:
-arrival/deadline, first service start, completion, drop, and elapsed defer time.
-It never reads true output length or future workload state. `last_breakdown`
-and `cumulative_breakdown` provide the component-level logging required above.
-Until lifecycle events expose attributed GPU time, the wasted-service term uses
-the observable interval from first service start through late completion.
+`last_breakdown` and `cumulative_breakdown` provide the component-level logging
+required above.
