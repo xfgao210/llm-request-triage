@@ -391,6 +391,12 @@ class RewardModel(Protocol):
     def reward(self, transition: Transition) -> float: ...
 ```
 
+The canonical implementation is `AsymmetricRewardModel`. It consumes only
+immutable request outcomes emitted by the kernel, including attributed GPU
+time, and charges each defer action for one bounded retry interval. Gymnasium
+environments depend on the `RewardModel` protocol and must not implement reward
+formulas in `step()`.
+
 ### 7.5 Lifecycle events
 
 ```python
