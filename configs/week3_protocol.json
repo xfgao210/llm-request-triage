@@ -1,0 +1,12 @@
+{
+  "training_revision": "fea1ded096f6031c1166a493e062e48bc6445c7d",
+  "training_record_sha256": "5017bb8ee444ec0f83e1bbaa95dc936a0ee023c7011321e34f6c483ab3799b33",
+  "split": "test",
+  "windows": 16,
+  "requests_per_window": 256,
+  "source_rates_rps": [1.2, 2.4],
+  "scenarios": {
+    "trace": 1,
+    "middle_third_3x": 3
+  }
+}
