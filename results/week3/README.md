@@ -45,7 +45,7 @@ each seed sees the same test requests.
 
 ## Run it again
 
-Use the Week 3 checkout and Python 3.12:
+Use a Git checkout with full history and Python 3.12:
 
 ```bash
 python -m pip install -e ".[rl]" gymnasium==1.4.0 numpy==2.5.4
@@ -56,6 +56,9 @@ The runner downloads the pinned trace when the prepared cache is absent. Pass
 `--source /path/to/BurstGPT_1.csv` to prepare from an existing raw copy. Use a
 fresh `--output` directory for repeated runs. If you already have all three
 frozen checkpoints, pass their directory with `--checkpoints-dir` to skip training.
+For a fresh training run it uses the recorded trainer and reward from the frozen
+commit. For training with the current reward, use the
+[reusable pipeline](../../docs/run_pipeline.md).
 The strict checksum gate was verified with Python 3.12 on Windows. A different
 numerical build can require reusing the exact checkpoints.
 

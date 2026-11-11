@@ -3,13 +3,19 @@
 import argparse
 from dataclasses import replace
 import json
+import io
+import os
 from pathlib import Path
 from statistics import fmean
+import subprocess
+import sys
+import tarfile
+import tempfile
 
 import gymnasium
 import numpy as np
 
-from experiments.train_dqn import evaluate, run as train, write_csv, write_json
+from experiments.train_dqn import evaluate, write_csv, write_json
 from llm_triage.rl.dqn import DQN
 from llm_triage.simulation import HardwareConfig, ServiceProfile
 from llm_triage.workload.burstgpt import load_windows, prepare, sha256
@@ -19,6 +25,21 @@ from llm_triage.workload.transforms import replay_window
 ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL = ROOT / "configs/week3_protocol.json"
 TRAINING_RECORD = ROOT / "results/week2/run.json"
+
+
+def rebuild_frozen_training(revision, processed, output):
+    """Use the recorded trainer and reward when replaying the published run."""
+    with tempfile.TemporaryDirectory(prefix="triage-frozen-training-") as temporary:
+        snapshot = Path(temporary)
+        archive = subprocess.check_output(["git", "archive", revision], cwd=ROOT)
+        with tarfile.open(fileobj=io.BytesIO(archive)) as source:
+            source.extractall(snapshot, filter="data")
+        environment = dict(os.environ, PYTHONPATH=str(snapshot / "src"))
+        subprocess.run(
+            [sys.executable, "-m", "experiments.train_dqn",
+             "--processed-dir", str(processed.resolve()), "--output", str(output.resolve())],
+            cwd=snapshot, env=environment, check=True,
+        )
 
 
 def compress_middle_third(replay, multiplier):
@@ -117,7 +138,7 @@ def run(output, data_dir, source=None, checkpoints_dir=None):
     output.mkdir(parents=True, exist_ok=False)
     if checkpoints_dir is None:
         checkpoints_dir = output / "training"
-        train(config, processed, checkpoints_dir)
+        rebuild_frozen_training(protocol["training_revision"], processed, checkpoints_dir)
     paths = verify_checkpoints(checkpoints_dir, training["checkpoints"])
     models = {name: DQN.load(path)[0] for name, path in paths.items()}
 

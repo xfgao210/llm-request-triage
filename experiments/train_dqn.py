@@ -110,7 +110,7 @@ def evaluate(models, cases, hardware, profile, estimate, decisions, *, baselines
 
 def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, reward, output, metadata):
     rng = random.Random(seed)
-    model = DQN(seed=seed)
+    model = DQN(seed=seed, **config.get("agent", {}))
     initial = model.copy_weights()
     replay_buffer = ReplayBuffer(REPLAY_CAPACITY, seed + 1000)
     history, selection = [], []
@@ -186,6 +186,8 @@ def run(config, processed_dir, output, checkpoint=None):
     profile = ServiceProfile()
     decisions = config["decisions"]
     reward = RewardConfig(**config["reward"])
+    # Validate optional agent parameters before creating a run directory.
+    DQN(**config.get("agent", {}))
     metadata = dict(config=config, **provenance, features=list(FULL_FEATURE_NAMES),
                     actions=[a.value for a in ACTIONS], estimated_output_tokens=estimate,
                     service_profile=vars(profile), reward_config=vars(reward),
