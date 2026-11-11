@@ -1,0 +1,70 @@
+{
+  "checkpoints": [
+    {
+      "episode": 24,
+      "seed": 7,
+      "sha256": "5bc871a532585e3918ab67b9ad5c7a3dc13b0ab78b13de4c07c3ee32c8eca5f6",
+      "validation_attainment": 0.810302734375
+    },
+    {
+      "episode": 8,
+      "seed": 17,
+      "sha256": "bdaae536ea0761169776245e09ad4fd869622cce2dfc02535065dbcc5ea9b27b",
+      "validation_attainment": 0.83984375
+    },
+    {
+      "episode": 16,
+      "seed": 27,
+      "sha256": "12524dc4fb202afe39e3680aa106acb4b8231a3996ba771d61bfa2d15fe089bc",
+      "validation_attainment": 0.8369140625
+    }
+  ],
+  "gymnasium": "1.4.0",
+  "manifest_sha256": "a90bf7724176790cb6847315e4c4b3a4db003bc9eab6a090f756990b08232977",
+  "numpy": "2.5.4",
+  "policy_runs": 384,
+  "protocol": {
+    "requests_per_window": 256,
+    "scenarios": {
+      "middle_third_3x": 3,
+      "trace": 1
+    },
+    "source_rates_rps": [
+      1.2,
+      2.4
+    ],
+    "split": "test",
+    "training_record_sha256": "5017bb8ee444ec0f83e1bbaa95dc936a0ee023c7011321e34f6c483ab3799b33",
+    "training_revision": "fea1ded096f6031c1166a493e062e48bc6445c7d",
+    "windows": 16
+  },
+  "protocol_sha256": "4f6d554144bf88bb941ba4743a87ee875db308de5e65e6a5540bbc748cc966ef",
+  "request_executions": 98304,
+  "trace_sha256": "d76a69b0fe6f21b6d9f975631d78a85c03cf2244554252605f11a6d6dc25e44c",
+  "training_config": {
+    "decisions": {
+      "defer_retry_s": 0.25,
+      "max_defers": 5
+    },
+    "episodes": 24,
+    "hardware": {
+      "gpu_name": "RTX-5070-12GB/Qwen2.5-0.5B",
+      "kv_block_size": 16,
+      "kv_total_blocks": 48059,
+      "max_batch_size": 32
+    },
+    "reward": {},
+    "seeds": [
+      7,
+      17,
+      27
+    ],
+    "slo_s": 5.0,
+    "target_rps": [
+      1.2,
+      2.4
+    ],
+    "validate_every": 8
+  },
+  "unique_test_requests": 4096
+}
