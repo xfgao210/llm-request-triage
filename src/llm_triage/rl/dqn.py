@@ -10,6 +10,12 @@ from .observation import FULL_FEATURE_NAMES as FEATURES
 
 class DQN:
     def __init__(self, seed=0, hidden=32, learning_rate=0.001, gamma=0.99):
+        if isinstance(hidden, bool) or not isinstance(hidden, int) or hidden < 1:
+            raise ValueError("hidden must be a positive integer")
+        if not np.isfinite(learning_rate) or learning_rate <= 0:
+            raise ValueError("learning_rate must be finite and positive")
+        if not np.isfinite(gamma) or not 0 <= gamma <= 1:
+            raise ValueError("gamma must lie in [0, 1]")
         self.rng = np.random.default_rng(seed)
         self.learning_rate = learning_rate
         self.gamma = gamma

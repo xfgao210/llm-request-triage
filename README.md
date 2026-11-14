@@ -30,18 +30,33 @@ See [integration instructions](docs/week1-integration.md) and the
 An additional [artificial KV stress scenario](results/week1-integrated-kv-stress/REPORT.md)
 exercises capacity pressure and preemption on the same validation cohort.
 
-## Train the Week 2 agent
+## Run training and evaluation end to end
 
-After preparing BurstGPT, install the RL dependencies and start a CPU run:
+From a checkout with Python 3.11 or 3.12, install the package and run:
 
 ```bash
 python -m pip install -e ".[dev,rl]"
-python experiments/train_dqn.py
+python -m experiments.run_pipeline
 ```
 
-The command trains three Double-DQN seeds on the shared simulator and compares
-their selected checkpoints with the deterministic baselines. See the
-[Week 2 results and replay commands](results/week2/README.md).
+The pipeline prepares BurstGPT, trains three DQN seeds, reloads the checkpoints,
+and compares them with the rules on validation. See the
+[team run guide](docs/run_pipeline.md) for the quick check, custom training
+settings, and the KV pressure experiment. The original Week 2 run is recorded
+in [its results folder](results/week2/README.md).
+
+## Reproduce the Week 3 holdout
+
+From this checkout with Python 3.12:
+
+```bash
+python -m pip install -e ".[rl]" gymnasium==1.4.0 numpy==2.5.4
+python -m experiments.reproduce_week3
+```
+
+The second command prepares BurstGPT, rebuilds the three validation-selected
+checkpoints, checks their hashes, and runs the paired test comparison. See
+[the Week 3 results](results/week3/README.md) for the replay settings and output files.
 
 ## Components
 

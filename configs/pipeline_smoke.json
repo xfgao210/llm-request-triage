@@ -1,0 +1,16 @@
+{
+  "seeds": [7],
+  "episodes": 2,
+  "validate_every": 1,
+  "target_rps": [1.2],
+  "slo_s": 5.0,
+  "hardware": {
+    "gpu_name": "RTX-5070-12GB/Qwen2.5-0.5B",
+    "max_batch_size": 32,
+    "kv_block_size": 16,
+    "kv_total_blocks": 48059
+  },
+  "decisions": {"defer_retry_s": 0.25, "max_defers": 5},
+  "reward": {},
+  "agent": {"hidden": 32, "learning_rate": 0.001, "gamma": 0.99}
+}
