@@ -10,3 +10,6 @@ tmp/
 /data/processed/
 /results/runs/
 /results/colab_synthetic/
+/BurstGPT_3.csv
+/data/burstgpt3/
+/results/traffic_analysis/

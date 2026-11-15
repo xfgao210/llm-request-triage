@@ -32,6 +32,10 @@ exercises capacity pressure and preemption on the same validation cohort.
 
 ## Run training and evaluation end to end
 
+For BurstGPT 3, use the [Colab training and scenario notebook](notebooks/colab_burstgpt3_experiments.ipynb).
+It prepares explicit time ranges, trains and validates DQN, optionally evaluates
+frozen test scenarios, and exports charts and a shareable HTML report.
+
 From a checkout with Python 3.11 or 3.12, install the package and run:
 
 ```bash

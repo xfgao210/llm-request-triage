@@ -115,12 +115,25 @@ def run_locked(config, data_dir, output, *, source=None, resume=False):
         state.update(status="running", stage="prepare")
         atomic_state(state_path, state)
         processed = data_dir / "processed"
-        if source is not None or not (processed / "manifest.json").exists():
+        dataset = config.get("dataset", "burstgpt1")
+        if dataset not in {"burstgpt1", "burstgpt3"}:
+            raise ValueError("Unknown dataset")
+        if dataset == "burstgpt3":
+            if source is not None or not (processed / "manifest.json").exists():
+                raise ValueError("Prepare BurstGPT 3 first with scripts/prepare_burstgpt3.py; omit --source here")
+            manifest = json.loads((processed / "manifest.json").read_text(encoding="utf-8"))
+            if manifest.get("dataset") != "burstgpt3":
+                raise ValueError("Expected prepared BurstGPT 3 scenarios in --data-dir")
+        elif source is not None or not (processed / "manifest.json").exists():
             raw = data_dir / "raw"
             raw.mkdir(parents=True, exist_ok=True)
             with run_lock(raw):
                 if source is not None or not (processed / "manifest.json").exists():
                     prepare(data_dir=data_dir, source=source)
+        else:
+            manifest = json.loads((processed / "manifest.json").read_text(encoding="utf-8"))
+            if manifest.get("dataset") == "burstgpt3":
+                raise ValueError("Use a config with dataset=burstgpt3 for these scenarios")
         cohorts, estimate, provenance = load_cohorts(processed, config)
         if "data" in state and state["data"] != provenance:
             raise ValueError("Prepared data changed since the previous attempt")

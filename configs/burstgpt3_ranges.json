@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "description": "Three annotated time ranges. The first range is split chronologically about 80/20 into training and validation, with a five-minute separation gap. Range 2 is mixed-traffic test; range 3 is peak-heavy test. Annotation boundaries are estimates snapped to five-minute bins.",
+  "source_sha256": "2299986a07388aa303ec2c41d1131e756db650a39ed6ef9dfe7cc3d7f9a43b8f",
+  "episode_seconds": 300,
+  "min_split_gap_seconds": 300,
+  "ranges": [
+    {
+      "split": "train",
+      "group": "training",
+      "start_timestamp_s": 19462830,
+      "end_timestamp_s": 20465430
+    },
+    {
+      "split": "validation",
+      "group": "validation",
+      "start_timestamp_s": 20465730,
+      "end_timestamp_s": 20716230
+    },
+    {
+      "split": "test",
+      "group": "mixed_traffic",
+      "start_timestamp_s": 21147030,
+      "end_timestamp_s": 22155630
+    },
+    {
+      "split": "test",
+      "group": "peak_heavy",
+      "start_timestamp_s": 23076030,
+      "end_timestamp_s": 23570430
+    }
+  ]
+}

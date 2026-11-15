@@ -42,17 +42,26 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
 
 
-def load_cohorts(processed_dir, config):
+def load_cohorts(processed_dir, config, splits=("train", "validation")):
     csv_path = processed_dir / "burstgpt_windows.csv"
     manifest_path = processed_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if sha256(csv_path) != manifest["selected_sha256"]:
         raise ValueError("Prepared windows differ from manifest")
     windows = load_windows(csv_path)
+    layout = {(item["split"], item["window"]): item for item in manifest.get("windows", [])}
+
+    def replay(key, rows, rate):
+        item = layout.get(key, {})
+        bounds = None
+        if manifest.get("windowing") == "fixed_duration":
+            bounds = (item["start_timestamp_s"], item["end_timestamp_s"])
+        return replay_window(rows, slo_s=config["slo_s"], target_rps=rate, bounds=bounds)
+
     cohorts = {}
-    for split in ("train", "validation"):
+    for split in splits:
         cohorts[split] = [
-            (window, rate, replay_window(rows, slo_s=config["slo_s"], target_rps=rate))
+            (window, rate, replay((partition, window), rows, rate))
             for (partition, window), rows in sorted(windows.items()) if partition == split
             for rate in config["target_rps"]
         ]
@@ -179,8 +188,11 @@ def run(config, processed_dir, output, checkpoint=None):
     if not seeds or any(type(seed) is not int or seed < 0 for seed in seeds) or len(set(seeds)) != len(seeds):
         raise ValueError("Use unique nonnegative integer seeds")
     rates = config["target_rps"]
-    if not rates or any(not math.isfinite(rate) or rate <= 0 for rate in rates) or len(set(rates)) != len(rates):
-        raise ValueError("Use unique positive arrival rates")
+    if not rates or any(rate is not None and (
+        isinstance(rate, bool) or not isinstance(rate, (int, float))
+        or not math.isfinite(rate) or rate <= 0
+    ) for rate in rates) or len(set(rates)) != len(rates):
+        raise ValueError("Use unique positive arrival rates, or null for native timing")
     cohorts, estimate, provenance = load_cohorts(processed_dir, config)
     hardware = HardwareConfig(**config["hardware"])
     profile = ServiceProfile()
