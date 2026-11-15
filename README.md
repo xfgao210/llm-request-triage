@@ -35,6 +35,10 @@ exercises capacity pressure and preemption on the same validation cohort.
 For BurstGPT 3, use the [Colab training and scenario notebook](notebooks/colab_burstgpt3_experiments.ipynb).
 It prepares explicit time ranges, trains and validates DQN, optionally evaluates
 frozen test scenarios, and exports charts and a shareable HTML report.
+For a separate past-feedback-only experiment, use the
+[online adaptation notebook](notebooks/colab_burstgpt3_online_adaptation.ipynb).
+It reuses the offline checkpoint and compares a frozen copy with an adapting
+copy on identical chronological traffic; see the [protocol](docs/online_adaptation.md).
 
 From a checkout with Python 3.11 or 3.12, install the package and run:
 

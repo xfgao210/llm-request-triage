@@ -133,3 +133,61 @@ def test_frozen_groups_and_idle_duration_are_reported_separately(range_data, tmp
     assert all(row["measurement_window_s"] == 125 for row in ordinary)
     with pytest.raises(ValueError, match="Unknown evaluation group"):
         evaluate(training / "training", data, tmp_path / "bad-group", split="test", groups=["missing"])
+
+
+def test_online_copy_learns_only_after_step_and_keeps_source_frozen(range_data, tmp_path, monkeypatch):
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("gymnasium")
+    from experiments.run_pipeline import run as train
+    from experiments.online_adaptation import run
+    from llm_triage.rl import TriageEnv
+    from llm_triage.rl.dqn import DQN
+    from llm_triage.workload.burstgpt import sha256
+
+    source, analysis, _, path = range_data
+    data, training, output = tmp_path / "data", tmp_path / "training", tmp_path / "online"
+    prepare_ranges(source, analysis, data, path)
+    config = dict(dataset="burstgpt3", seeds=[7], episodes=2, validate_every=1,
+                  target_rps=[None], slo_s=5, hardware={"max_batch_size": 4},
+                  decisions={"defer_retry_s": 0.25, "max_defers": 5}, reward={})
+    train(config, data, training)
+    checkpoint = training / "training/dqn_seed7.npz"
+    digest = sha256(checkpoint)
+    delivered, update_times = [], []
+    original_step, original_train = TriageEnv.step, DQN.train_batch
+
+    def step(self, action):
+        value = original_step(self, action)
+        delivered.append(value[-1]["now_s"])
+        return value
+
+    def update(self, batch):
+        assert delivered, "Training before any outcomes were delivered"
+        update_times.append(delivered[-1])
+        return original_train(self, batch)
+
+    monkeypatch.setattr(TriageEnv, "step", step)
+    monkeypatch.setattr(DQN, "train_batch", update)
+    rows = run(training / "training", data, output, warmup=16, batch_size=8)
+    assert {r["group"] for r in rows} == {"ordinary", "peak_heavy"}
+    assert {r["policy"] for r in rows} == {"frozen", "adapting"}
+    assert all(r["arrivals"] == 300 for r in rows)
+    assert update_times == sorted(update_times) and update_times
+    saved = json.loads((output / "run.json").read_text())
+    assert saved["status"] == "completed"
+    assert saved["policy_runs"][0]["updates"] == 0
+    assert saved["policy_runs"][1]["updates"] > 0
+    assert saved["policy_runs"][1]["max_weight_change"] > 0
+    assert sha256(checkpoint) == digest
+    original, _ = DQN.load(checkpoint)
+    frozen, _ = DQN.load(output / "frozen_final.npz")
+    assert all(np.array_equal(v, frozen.params[k]) for k, v in original.params.items())
+    with (output / "adapting_updates.csv").open() as stream:
+        audit = list(csv.DictReader(stream))
+    assert all(float(r["source_timestamp_s"]) >= 1800 for r in audit)
+    assert [float(r["source_timestamp_s"]) for r in audit] == sorted(float(r["source_timestamp_s"]) for r in audit)
+    with (output / "timeline.csv").open() as stream:
+        timeline = list(csv.DictReader(stream))
+    assert len(timeline) == 6  # Includes the ordinary group's empty bin for both copies.
+    with pytest.raises(FileExistsError):
+        run(training / "training", data, output)
