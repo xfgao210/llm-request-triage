@@ -37,8 +37,12 @@ It prepares explicit time ranges, trains and validates DQN, optionally evaluates
 frozen test scenarios, and exports charts and a shareable HTML report.
 For a separate past-feedback-only experiment, use the
 [online adaptation notebook](notebooks/colab_burstgpt3_online_adaptation.ipynb).
-It reuses the offline checkpoint and compares a frozen copy with an adapting
-copy on identical chronological traffic; see the [protocol](docs/online_adaptation.md).
+It includes offline training and validation, then compares frozen and adapting
+copies on identical chronological traffic. Only the CSV is required; no prior
+results ZIP is needed. See the [protocol](docs/online_adaptation.md).
+Both notebooks offer `DEVICE="auto"` (CUDA minibatch learning when available,
+CPU fallback), or explicit `cpu`/`cuda`. Simulation remains CPU-based; GPU mode
+is optional and may not be faster for this small network.
 
 From a checkout with Python 3.11 or 3.12, install the package and run:
 

@@ -6,6 +6,7 @@ import json
 import math
 from pathlib import Path
 import random
+import time
 from statistics import fmean
 
 import gymnasium
@@ -120,10 +121,12 @@ def evaluate(models, cases, hardware, profile, estimate, decisions, *, baselines
 def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, reward, output, metadata):
     rng = random.Random(seed)
     model = DQN(seed=seed, **config.get("agent", {}))
+    print(f"seed={seed} learner={model.learner_runtime}", flush=True)
     initial = model.copy_weights()
     replay_buffer = ReplayBuffer(REPLAY_CAPACITY, seed + 1000)
     history, selection = [], []
     total_steps = 0
+    learner_seconds = 0.0
     best_score, best_weights, best_episode = -math.inf, None, None
 
     def validate(episode):
@@ -159,9 +162,12 @@ def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, re
             total_steps += 1
             episode_reward += value
             if replay_buffer.size >= WARMUP and total_steps % UPDATE_INTERVAL == 0:
+                update_started = time.perf_counter()
                 losses.append(model.train_batch(replay_buffer.sample(BATCH_SIZE)))
+                learner_seconds += time.perf_counter() - update_started
         history.append(dict(seed=seed, episode=episode, window=window, target_rps=rate, steps=total_steps,
-                            updates=model.updates, reward=episode_reward, loss=fmean(losses) if losses else None,
+                            updates=model.updates, learner_seconds=learner_seconds,
+                            reward=episode_reward, loss=fmean(losses) if losses else None,
                             train_attainment=info["episode_metrics"]["slo_attainment"],
                             train_drop_rate=info["episode_metrics"]["drop_rate"]))
         if episode % config["validate_every"] == 0 or episode == config["episodes"]:
@@ -172,7 +178,8 @@ def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, re
         raise RuntimeError("Training did not change the model weights")
     model.params = best_weights
     path = output / f"dqn_seed{seed}.npz"
-    model.save(path, dict(metadata, seed=seed, episode=best_episode, validation_attainment=best_score))
+    model.save(path, dict(metadata, seed=seed, episode=best_episode, validation_attainment=best_score,
+                          learner_runtime=model.learner_runtime))
     restored, _ = DQN.load(path)
     if any(not np.array_equal(value, restored.params[key]) for key, value in best_weights.items()):
         raise RuntimeError("Checkpoint round trip changed the model weights")
@@ -199,7 +206,7 @@ def run(config, processed_dir, output, checkpoint=None):
     decisions = config["decisions"]
     reward = RewardConfig(**config["reward"])
     # Validate optional agent parameters before creating a run directory.
-    DQN(**config.get("agent", {}))
+    probe = DQN(**config.get("agent", {}))
     metadata = dict(config=config, **provenance, features=list(FULL_FEATURE_NAMES),
                     actions=[a.value for a in ACTIONS], estimated_output_tokens=estimate,
                     service_profile=vars(profile), reward_config=vars(reward),
@@ -228,6 +235,7 @@ def run(config, processed_dir, output, checkpoint=None):
     write_csv(output / "validation.csv", rows)
     write_json(output / "run.json", dict(
         **metadata, checkpoints=checkpoints, gymnasium=gymnasium.__version__, numpy=np.__version__,
+        learner_runtime=saved.get("learner_runtime") if checkpoint is not None else probe.learner_runtime,
         batch_size=BATCH_SIZE, warmup=WARMUP, replay_capacity=REPLAY_CAPACITY, update_interval=UPDATE_INTERVAL,
         train_windows=len({window for window, _, _ in cohorts["train"]}),
         validation_windows=len({window for window, _, _ in cohorts["validation"]}),

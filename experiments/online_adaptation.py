@@ -26,7 +26,7 @@ from llm_triage.workload.transforms import replay_window
 
 def run(training_dir, data_dir, output, *, seed=7, groups=None,
         epsilon=0.0, learning_rate=0.0001, batch_size=64, warmup=256,
-        update_interval=4, capacity=50000, max_seconds_per_group=None):
+        update_interval=4, capacity=50000, max_seconds_per_group=None, device="auto"):
     """Replay each policy once; persist adapting weights across chronological groups.
 
     Both policies use ONE continuous environment covering selected ranges and
@@ -36,6 +36,8 @@ def run(training_dir, data_dir, output, *, seed=7, groups=None,
     """
     if output.exists():
         raise FileExistsError(output)
+    from llm_triage.rl.devices import resolve_device
+    resolved_device = resolve_device(device)
     for name, value in dict(seed=seed, batch_size=batch_size, warmup=warmup,
                             update_interval=update_interval, capacity=capacity).items():
         if type(value) is not int or value < (0 if name == "seed" else 1):
@@ -99,7 +101,7 @@ def run(training_dir, data_dir, output, *, seed=7, groups=None,
     output.mkdir(parents=True)
     settings = dict(seed=seed, groups=groups, epsilon=epsilon, learning_rate=learning_rate,
                     batch_size=batch_size, warmup=warmup, update_interval=update_interval,
-                    capacity=capacity, max_seconds_per_group=max_seconds_per_group)
+                    capacity=capacity, max_seconds_per_group=max_seconds_per_group, device=device)
     provenance = dict(protocol="online_prequential_continuous_v1", settings=settings,
                       selected_ranges=ranges, source_checkpoint_sha256=original_hash, **hashes,
                       source_training_record_sha256=sha256(training_dir / "run.json"),
@@ -113,7 +115,8 @@ def run(training_dir, data_dir, output, *, seed=7, groups=None,
     summaries, bins, final = [], [], []
     for policy in ("frozen", "adapting"):
         started = time.monotonic()
-        model, metadata = DQN.load(checkpoint)
+        model, metadata = DQN.load(checkpoint, device=resolved_device if policy == "adapting" else "cpu")
+        print(f"{policy} learner={model.learner_runtime}", flush=True)
         if any(metadata.get(k) != record.get(k) for k in (
             "config", "features", "actions", "service_profile", "reward_config", *hashes
         )):
@@ -129,7 +132,7 @@ def run(training_dir, data_dir, output, *, seed=7, groups=None,
                         reward_config=RewardConfig(**record["reward_config"]),
                         **config["decisions"], **policy_options(replay, config["decisions"]))
         state, info = env.reset(seed=seed)
-        steps, observed_outcomes = 0, 0
+        steps, observed_outcomes, learner_seconds = 0, 0, 0.0
         # Stream audit to disk rather than retain a per-decision history in RAM.
         with (output / f"{policy}_updates.csv").open("w", newline="") as stream:
             audit = csv.DictWriter(stream, fieldnames=["step", "source_timestamp_s", "updates", "loss", "buffer_size", "observed_outcomes"])
@@ -150,7 +153,9 @@ def run(training_dir, data_dir, output, *, seed=7, groups=None,
                     # Insert ONLY AFTER step has delivered the reward and next state.
                     buffer.add(state, action, reward, next_state, done, next_info["action_mask"])
                     if buffer.size >= warmup and steps % update_interval == 0:
+                        update_started = time.monotonic()
                         loss = model.train_batch(buffer.sample(batch_size))
+                        learner_seconds += time.monotonic() - update_started
                         audit.writerow(dict(step=steps, source_timestamp_s=origin + next_info["now_s"],
                                             updates=model.updates, loss=loss, buffer_size=buffer.size,
                                             observed_outcomes=observed_outcomes))
@@ -177,8 +182,10 @@ def run(training_dir, data_dir, output, *, seed=7, groups=None,
         change = max(float(np.max(np.abs(model.params[k] - v))) for k, v in initial.items())
         if policy == "frozen" and (model.updates or change):
             raise RuntimeError("Frozen copy was modified")
-        model.save(output / f"{policy}_final.npz", dict(metadata, online_adaptation=policy == "adapting", online_settings=settings))
+        model.save(output / f"{policy}_final.npz", dict(metadata, online_adaptation=policy == "adapting",
+                   online_settings=settings, learner_runtime=model.learner_runtime))
         final.append(dict(policy=policy, decisions=steps, updates=model.updates,
+                          learner_device=model.device, learner_seconds=learner_seconds,
                           observed_outcomes=observed_outcomes, max_weight_change=change,
                           wall_seconds=time.monotonic()-started, final_source_timestamp_s=origin+info["now_s"]))
         print(f"{policy} completed: {steps} decisions, {model.updates} updates", flush=True)
@@ -207,6 +214,7 @@ def main():
     parser.add_argument("--update-interval", type=int, default=4)
     parser.add_argument("--capacity", type=int, default=50000)
     parser.add_argument("--max-seconds-per-group", type=float)
+    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     run(**vars(parser.parse_args()))
 
 

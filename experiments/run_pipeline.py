@@ -100,6 +100,8 @@ def run_locked(config, data_dir, output, *, source=None, resume=False):
     config_id = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
     fingerprint = training_fingerprint()
     runtime = dict(python=platform.python_version(), numpy=np.__version__, gymnasium=gymnasium.__version__)
+    if "device" in config.get("agent", {}):
+        runtime["learner"] = DQN(**config["agent"]).learner_runtime
     state_path = output / "pipeline.json"
     if resume:
         state = json.loads(state_path.read_text(encoding="utf-8"))

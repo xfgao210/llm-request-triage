@@ -1,10 +1,48 @@
 # Online adaptation comparison
 
-Offline training is unchanged. Run `colab_burstgpt3_experiments.ipynb` and
-download its team-results ZIP; a validation-only export is sufficient. Open
-`notebooks/colab_burstgpt3_online_adaptation.ipynb`, provide that ZIP and the
-original `BurstGPT_3.csv`, and select a checkpoint seed contained in the ZIP.
-The notebook verifies hashes and reconstructs the same prepared traffic.
+Open `notebooks/colab_burstgpt3_online_adaptation.ipynb` and provide only
+`BurstGPT_3.csv` through Google Drive or upload. This is one self-contained
+workflow: prepare data, train offline, select checkpoints on validation, then
+compare frozen and adapting copies on the same traffic. No previous notebook
+run, checkpoint upload, or results ZIP is required. The original frozen-only
+notebook remains available as an alternative, not a prerequisite.
+
+Offline training is unchanged: the notebook uses the original training cells
+and pipeline, with the same default seeds, episode budget, and validation
+selection. `ADAPTATION_SEED` selects one of the trained `SEEDS` for both copies.
+Use a blank `RUN_NAME` to rerun the entire workflow in a fresh output folder.
+The optional execution device changes where minibatch math runs, not the
+Double-DQN objective, masks, reward, or validation protocol.
+
+## Optional GPU minibatch learning
+
+Both notebooks expose `DEVICE="auto"`. In Colab, optionally select a GPU
+runtime before running setup. Auto uses CUDA if PyTorch reports a usable CUDA
+device, otherwise it uses the original NumPy CPU learner. `DEVICE="cpu"`
+forces CPU; `DEVICE="cuda"` fails clearly if CUDA is unavailable. Apple MPS
+is not selected. Local users wanting CUDA can install `pip install -e ".[rl,gpu]"`;
+PyTorch is optional for CPU-only use. Colab setup includes the GPU extra.
+
+Only sampled neural-network minibatch updates use CUDA. The event simulator,
+baselines, and single-request greedy inference remain on CPU. Keeping inference
+on CPU avoids synchronizing a tiny prediction with CUDA at every scheduling
+decision. Weights are synchronized back after each update, so checkpoints remain
+portable `.npz` arrays and the frozen copy need not use CUDA.
+
+**GPU availability does not imply a speedup.** The default 32-unit network is
+small, and transfer/kernel overhead and float64 math may make CUDA slower.
+Auto chooses by availability, not measured speed. Compare `DEVICE="auto"`
+with `DEVICE="cpu"` on the same short development trace before spending a
+long GPU session. Offline history and online learning summaries include
+`learner_seconds`; run records include the actual learner device/backend.
+CUDA uses PyTorch's masked Double-DQN, Huber loss, gradient clipping, and Adam
+with reference float64 precision; device/library floating-point differences
+can still change learning trajectories. No end-to-end speedup is claimed.
+
+PyTorch documents CUDA availability and execution in its
+[CUDA notes](https://docs.pytorch.org/docs/stable/notes/cuda.html).
+
+## Online protocol
 
 The second notebook runs two copies from identical selected weights:
 
@@ -22,9 +60,12 @@ still in flight are not used prematurely. Updates are timestamped in
 `adapting_updates.csv`, after the corresponding transition is observed.
 Terminal reward is delivered only when the entire stream terminates.
 
-The default notebook uses the first 1,800 seconds of each test group for a
-manageable workflow check. Set `MAX_SECONDS_PER_GROUP=None` to use complete
-selected ranges. Set `RUN_ONLINE_EXPERIMENT=True` to start. A full continuous
+The default notebook uses complete selected test ranges
+(`MAX_SECONDS_PER_GROUP=None`). For a manageable initial workflow check, set
+`MAX_SECONDS_PER_GROUP=1800` to use a 30-minute prefix of each group.
+`RUN_ONLINE_EXPERIMENT=True` runs the comparison after training and validation;
+set it to false to stop after validation (skip later comparison/report cells).
+A full continuous
 run may require a high-RAM runtime because the simulator retains lifecycle
 events. Traffic outside selected ranges is omitted and treated as idle;
 no-record intervals may actually be collection gaps.

@@ -83,6 +83,11 @@ workflow and produces comparison charts and a team-results ZIP. Open it in
 Colab from the `burstgpt_3` branch, place `BurstGPT_3.csv` in Google Drive
 (or choose upload), and run the setup, preparation, training, and validation
 sections. The simulation runs on CPU; a GPU runtime is not required.
+Both BurstGPT 3 notebooks now expose `DEVICE="auto"` for optional CUDA
+minibatch learning with CPU fallback; explicit `cpu` and `cuda` modes are also
+available. Simulation and inference stay on CPU, so GPU mode is not guaranteed
+to be faster. The [combined workflow](online_adaptation.md) trains and validates
+first, then compares frozen and adapting copies without a results-ZIP handoff.
 Set `RUN_FINAL_TESTS=True` only after settling model settings on validation.
 The notebook evaluates both named test groups with frozen checkpoints and
 can add controlled arrival-rate stress scenarios through `EXTRA_TEST_RATES`.

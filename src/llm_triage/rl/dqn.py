@@ -1,4 +1,4 @@
-"""NumPy Double-DQN adapted from the original Hengyi prototype."""
+"""Double-DQN with NumPy inference and optional CUDA minibatch learning."""
 
 import json
 
@@ -9,7 +9,7 @@ from .observation import FULL_FEATURE_NAMES as FEATURES
 
 
 class DQN:
-    def __init__(self, seed=0, hidden=32, learning_rate=0.001, gamma=0.99):
+    def __init__(self, seed=0, hidden=32, learning_rate=0.001, gamma=0.99, device="cpu"):
         if isinstance(hidden, bool) or not isinstance(hidden, int) or hidden < 1:
             raise ValueError("hidden must be a positive integer")
         if not np.isfinite(learning_rate) or learning_rate <= 0:
@@ -29,6 +29,18 @@ class DQN:
         self.m = {key: np.zeros_like(value) for key, value in self.params.items()}
         self.v = {key: np.zeros_like(value) for key, value in self.params.items()}
         self.updates = 0
+        from .devices import resolve_device
+        self.device = resolve_device(device)
+        self._accelerator = None
+
+    @property
+    def learner_runtime(self):
+        runtime = dict(device=self.device, backend="numpy", dtype="float64")
+        if self.device == "cuda":
+            import torch
+            runtime.update(backend="torch", torch=torch.__version__,
+                           gpu=torch.cuda.get_device_name())
+        return runtime
 
     def copy_weights(self):
         return {key: value.copy() for key, value in self.params.items()}
@@ -47,6 +59,15 @@ class DQN:
         return int(allowed[np.argmax(self.forward(state)[allowed])])
 
     def train_batch(self, batch):
+        if self.device == "cuda":
+            from .devices import TensorLearner
+            if self._accelerator is None:
+                self._accelerator = TensorLearner(self, self.device)
+            loss = self._accelerator.train_batch(self, batch)
+            self.updates += 1
+            if self.updates % 200 == 0:
+                self.target = self.copy_weights()
+            return loss
         states, actions, rewards, next_states, done, next_masks = batch
         # Only nonterminal transitions bootstrap. Their masks constrain selection.
         live = ~done
@@ -88,12 +109,12 @@ class DQN:
         np.savez(path, **self.params, metadata=json.dumps(metadata, sort_keys=True))
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path, *, device="cpu"):
         with np.load(path, allow_pickle=False) as data:
             metadata = json.loads(data["metadata"].item())
             if metadata["features"] != list(FEATURES) or metadata["actions"] != [a.value for a in ACTIONS]:
                 raise ValueError("Checkpoint observation or action schema does not match")
-            model = cls(hidden=data["b1"].size)
+            model = cls(hidden=data["b1"].size, device=device)
             for key, expected in model.params.items():
                 value = data[key]
                 if value.shape != expected.shape or not np.isfinite(value).all():
