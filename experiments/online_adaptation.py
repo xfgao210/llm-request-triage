@@ -60,7 +60,8 @@ def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.
                     estimated_output_tokens=record["estimated_output_tokens"],
                     reward_config=RewardConfig(**record["reward_config"]),
                     **config["decisions"],
-                    **policy_options(replay, config["decisions"], config.get("observation")))
+                    **policy_options(replay, config["decisions"], config.get("observation"),
+                                     config.get("candidate_selector", "fcfs")))
     state, info = env.reset(seed=seed)
     schedule = OnlineUpdateSchedule(update_interval, min_update_seconds, min_new_outcomes, max_updates,
                                     last_time_s=info["now_s"])
@@ -112,9 +113,9 @@ def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.
                 buffer.add(state, action, reward, next_state, done, next_info["action_mask"], elapsed_s=elapsed_s)
                 if buffer.size >= warmup and schedule.ready(steps=steps, now_s=next_info["now_s"],
                                                            outcomes=observed_outcomes, updates=model.updates):
-                    update_started = time.monotonic()
+                    update_started = time.perf_counter()
                     loss = model.train_batch(buffer.sample(batch_size))
-                    learner_seconds += time.monotonic() - update_started
+                    learner_seconds += time.perf_counter() - update_started
                     audit.writerow(dict(step=steps, sim_time_s=next_info["now_s"], source_timestamp_s=source_time(next_info["now_s"]),
                                         updates=model.updates, loss=loss, buffer_size=buffer.size,
                                         observed_outcomes=observed_outcomes,

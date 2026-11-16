@@ -127,7 +127,7 @@ def test_isolated_service_diagnostic_is_not_queueing(capacity_data, tmp_path):
 
 def test_capacity_notebook_is_clean_and_compiles():
     path = Path(__file__).resolve().parents[1] / "notebooks/colab_burstgpt3_capacity_sweep.ipynb"
-    notebook = json.loads(path.read_text())
+    notebook = json.loads(path.read_text(encoding="utf-8"))
     for cell in notebook["cells"]:
         if cell["cell_type"] == "code":
             compile("".join(cell["source"]), cell["id"], "exec")
@@ -140,7 +140,7 @@ def test_setup_imports_src_without_installed_package():
     import sys
 
     root = Path(__file__).resolve().parents[1]
-    notebook = json.loads((root / "notebooks/colab_burstgpt3_capacity_sweep.ipynb").read_text())
+    notebook = json.loads((root / "notebooks/colab_burstgpt3_capacity_sweep.ipynb").read_text(encoding="utf-8"))
     setup = next("".join(cell["source"]) for cell in notebook["cells"] if cell["id"] == "setup")
     # No PYTHONPATH, user site, or editable-install startup hooks. This models
     # the running kernel before it has processed a newly installed .pth file.
@@ -161,7 +161,7 @@ def test_entire_notebook_with_small_trace(capacity_data, tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[1]
     monkeypatch.chdir(root)
     monkeypatch.setattr(plt, "show", lambda: plt.close("all"))
-    notebook = json.loads((root / "notebooks/colab_burstgpt3_capacity_sweep.ipynb").read_text())
+    notebook = json.loads((root / "notebooks/colab_burstgpt3_capacity_sweep.ipynb").read_text(encoding="utf-8"))
     namespace = dict(__name__="__main__")
     for cell in notebook["cells"]:
         if cell["cell_type"] != "code":

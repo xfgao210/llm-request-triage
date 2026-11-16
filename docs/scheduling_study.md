@@ -17,6 +17,12 @@ reused test traffic. Workload joins are synthetic and retain the request lengths
 order and deadline budgets of each source window. Paired windows and streams are
 the units of comparison. Different training seeds share the same evaluation traffic.
 
+Each pilot stream has 1,024 arrivals. Alongside the branch's conservative
+2,048-transition warmup, run a short-stream variant with a 256-transition
+warmup. Keep learning rate, outcome gate, simulated-time gate and update
+budget fixed. The original warmup can yield zero updates on these streams.
+This comparison tests feedback availability as well as update effects.
+
 For a confirmatory run, obtain the BurstGPT 3 trace, prepare the existing
 chronological ranges, and use multiple nonoverlapping mixed and peak-heavy blocks.
 Use training and validation only to choose loads, thresholds, reward and update

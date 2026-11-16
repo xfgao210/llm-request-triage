@@ -106,7 +106,7 @@ def arrival_settings(config):
     return values
 
 
-def policy_options(replay, decisions, observation=None):
+def policy_options(replay, decisions, observation=None, candidate_selector="fcfs"):
     return dict(
         observation_config=ObservationConfig(
             preset="full", horizon_s=replay.horizon_s, max_defers=decisions["max_defers"],
@@ -117,16 +117,17 @@ def policy_options(replay, decisions, observation=None):
             max_defers=decisions["max_defers"] - 1, defer_retry_s=decisions["defer_retry_s"],
         ),
         invalid_action_mode="raise",
+        candidate_selector=candidate_selector,
     )
 
 
 def evaluate(models, cases, hardware, profile, estimate, decisions, *, baselines=False,
-             observation=None, multiplier_mode=False):
+             observation=None, multiplier_mode=False, candidate_selector="fcfs"):
     rows = []
     for window, rate, replay in cases:
         policies = baseline_schedulers() if baselines else {}
         policies.update({
-            name: RLPolicyCallback(model, **policy_options(replay, decisions, observation))
+            name: RLPolicyCallback(model, **policy_options(replay, decisions, observation, candidate_selector))
             for name, model in models.items()
         })
         executor = SimulatorExecutor(
@@ -162,7 +163,8 @@ def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, re
 
     def validate(episode):
         rows = evaluate({"dqn": model}, cohorts["validation"], hardware, profile, estimate, decisions,
-                        observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config)
+                        observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config,
+                        candidate_selector=config.get("candidate_selector", "fcfs"))
         score = fmean(row["slo_attainment"] for row in rows)
         weight_delta = max(float(np.max(np.abs(model.params[key] - value))) for key, value in initial.items())
         selection.append(dict(seed=seed, episode=episode, updates=model.updates, max_weight_change=weight_delta,
@@ -180,7 +182,8 @@ def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, re
         window, rate, replay = rng.choice(candidates)
         env = TriageEnv(
             replay, hardware, profile, estimated_output_tokens=estimate, reward_config=reward,
-            **decisions, **policy_options(replay, decisions, config.get("observation")),
+            **decisions, **policy_options(replay, decisions, config.get("observation"),
+                                         config.get("candidate_selector", "fcfs")),
         )
         state, info = env.reset(seed=seed)
         if info["is_terminal"]:
@@ -268,7 +271,8 @@ def run(config, processed_dir, output, checkpoint=None):
         write_csv(output / "training.csv", history)
         write_csv(output / "checkpoints.csv", selection)
     rows = evaluate(models, cohorts["validation"], hardware, profile, estimate, decisions, baselines=True,
-                    observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config)
+                    observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config,
+                    candidate_selector=config.get("candidate_selector", "fcfs"))
     write_csv(output / "validation.csv", rows)
     write_json(output / "run.json", dict(
         **metadata, checkpoints=checkpoints, gymnasium=gymnasium.__version__, numpy=np.__version__,
