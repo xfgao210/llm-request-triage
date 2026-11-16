@@ -53,13 +53,14 @@ class TensorLearner:
         if self.target_ref is not model.target:
             self.target = {k: torch.as_tensor(v.copy(), device=self.device) for k, v in model.target.items()}
             self.target_ref = model.target
-        states, actions, rewards, next_states, done, masks = batch
+        states, actions, rewards, next_states, done, masks, discounts = model.unpack_batch(batch)
         states = torch.as_tensor(states, dtype=torch.float64, device=self.device)
         next_states = torch.as_tensor(next_states, dtype=torch.float64, device=self.device)
         actions = torch.as_tensor(actions, dtype=torch.long, device=self.device)
         rewards = torch.as_tensor(rewards, dtype=torch.float64, device=self.device)
         done = torch.as_tensor(done, dtype=torch.bool, device=self.device)
         masks = torch.as_tensor(masks, dtype=torch.bool, device=self.device)
+        discounts = torch.as_tensor(discounts, dtype=torch.float64, device=self.device)
         with torch.no_grad():
             live = ~done
             targets = rewards.clone()
@@ -67,7 +68,7 @@ class TensorLearner:
             if live.any():
                 online = self.forward(next_states[live], self.params).masked_fill(~masks[live], -float("inf"))
                 next_actions = online.argmax(dim=1, keepdim=True)
-                targets[live] += model.gamma * self.forward(next_states[live], self.target).gather(1, next_actions).squeeze(1)
+                targets[live] += discounts[live] * self.forward(next_states[live], self.target).gather(1, next_actions).squeeze(1)
         self.optimizer.param_groups[0]["lr"] = model.learning_rate
         self.optimizer.zero_grad(set_to_none=True)
         q = self.forward(states, self.params).gather(1, actions[:, None]).squeeze(1)

@@ -6,6 +6,14 @@ The reward model favors on-time completion, treats late computation as more
 costly than proactive dropping, assigns a bounded cost to deferral, and uses a
 terminal objective to prevent the policy from learning to drop every request.
 
+This is a shaped multiobjective reward, **not equivalent to maximizing raw SLO
+attainment**. Checkpoint selection/reporting uses attainment over all arrivals;
+the reward additionally trades off late work, drops and GPU waste. Its bounded
+terminal-rate terms do not guarantee that policy rankings match attainment.
+The adaptation notebook now logs actual reward components/totals beside the
+metrics without changing these weights. Bootstrap discounting is a separate
+learner setting; see [the stability protocol](online_adaptation.md).
+
 ## Transition reward
 
 For one completed transition:

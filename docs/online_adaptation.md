@@ -43,6 +43,78 @@ individual seed results. Baselines run once per condition, not once per seed.
 
 ## Independent conditions and safe resume
 
+### Stability experiment v2: discounting, update budgets and audit logs
+
+Use a fresh run name, default `load_stress_stability_v2`. The notebook now
+defaults to `DISCOUNT_MODE="elapsed_time"` and
+`ADAPTATION_PRESET="conservative"`. These are initial **development ablation**
+settings, not a proven improvement or parameters tuned on an untouched test.
+The network, reward weights, serving profile, completion SLO, and default 8×
+peak requests/window remain unchanged.
+
+Elapsed-time bootstrapping uses
+`gamma ** (elapsed_simulation_seconds / discount_time_unit_s)` in offline
+training and online adaptation, on both NumPy and optional CUDA learners.
+Defaults are gamma=0.99 per one simulated second. Zero-time scheduling
+decisions do not discount future value. This changes the bootstrap multiplier,
+not the observed step reward: individual completion events inside one step are
+still aggregated by the existing reward model, not separately time-discounted.
+The time unit is simulated server time, not original CSV time or learner wall time.
+
+Replay buffers record each transition's elapsed seconds. Time-aware batches
+reject missing/negative/nonfinite durations. Checkpoints preserve the discount
+mode, gamma and time unit; old checkpoints retain legacy per-decision semantics.
+**Retrain when changing discount semantics.** Do not change them only after
+loading old weights. Frozen inference does not update under either mode.
+
+| Online preset | LR | Warmup transitions | Decision interval | Min simulated seconds | Min new outcomes | Max updates/condition |
+|---|---:|---:|---:|---:|---:|---:|
+| conservative | 1e-5 | 2048 | 32 | 1.0 | 32 | 100 |
+| legacy | 1e-4 | 256 | 4 | 0 | 0 | unlimited |
+
+All gates must pass after feedback has been delivered. Outcomes include drops
+as well as served/violated requests. Gates reset after an update; there is no
+catch-up burst. A short run can end with zero updates, which is reported rather
+than hidden. `custom` uses the notebook's explicit schedule values. The existing
+target network synchronizes every 200 updates; a 100-update budget therefore
+keeps its target anchored to the starting checkpoint for that condition.
+
+The two axes are separate: the legacy update preset does not automatically
+select decision discounting. For controlled comparisons, vary one axis at a
+time: decision+legacy, decision+conservative, elapsed_time+legacy,
+elapsed_time+conservative. Retrain consistently for each discount mode; use
+separate run names. Changing both axes at once cannot establish which helped.
+
+Set `EVALUATION_SPLIT="validation"` for development ablations. This explicitly
+selects a burst window within the configured validation range, not a test
+window, and labels it as development rather than held-out evaluation. The
+default `"test"` still selects the original mixed/peak conditions. Selecting
+validation does change which traffic is evaluated; no such change is hidden
+inside the conservative preset. Preserve the same development window/load
+when comparing ablations, then evaluate the chosen settings separately.
+
+Each DQN case now exports `*_transitions.csv` and `*_updates.csv`. They record:
+
+- pre-update Q-values and action masks, selected action and request ID;
+- simulated elapsed time, source timestamp and actual bootstrap multiplier;
+- observed reward components, total/cumulative reward and outcome counts;
+- queue lengths, update counts, time/feedback since the previous update,
+  update loss and parameter drift.
+
+Plots show decision frequencies, signed reward components, updates against
+simulation time and Q(admit)-Q(drop) gaps. Decision shares are not request drop
+rates; Q-value gaps are not counterfactual performance. Other-request outcomes
+can contribute to a global step reward; the latest action did not necessarily
+cause every completion in that step. Logs reflect already delivered feedback,
+never future outcomes. Diagnostic logging increases archive size.
+
+**Objective distinction:** primary checkpoint selection and reported ranking
+use completion-SLO attainment over all arrivals. The unchanged shaped reward
+also penalizes lateness, drops, deferral and wasted GPU time, so higher reward
+need not mean higher SLO attainment. Report actual undiscounted reward totals
+beside SLO/drop/TTFT metrics; do not silently retune reward weights or call the
+two objectives equivalent.
+
 ### Quick mode without changing the burst
 
 The notebook defaults to `RUN_MODE="quick"`: it first selects the same complete

@@ -27,7 +27,7 @@ from llm_triage.workload.transforms import replay_window
 POLICIES = ("fcfs", "length_aware", "static_slo_aware", "frozen", "adapting")
 
 
-def select_run_conditions(windows, multipliers, seeds, *, mode="full", quick_seed=None):
+def select_run_conditions(windows, multipliers, seeds, *, mode="full", quick_seed=None, quick_group="peak_heavy"):
     """Reduce independent cases, never requests or the selected window bounds.
 
     Selection occurs AFTER the usual full-window selection, so quick's peak
@@ -39,22 +39,25 @@ def select_run_conditions(windows, multipliers, seeds, *, mode="full", quick_see
         raise ValueError("Select windows, arrival multipliers and seeds first")
     if mode == "full":
         return [dict(w) for w in windows], list(multipliers), list(seeds)
-    peaks = [w for w in windows if w["group"] == "peak_heavy"]
+    peaks = [w for w in windows if w["group"] == quick_group]
     if len(peaks) != 1 or 8 not in multipliers:
-        raise ValueError("Quick mode requires exactly one peak_heavy window and an existing 8x condition")
+        raise ValueError(f"Quick mode requires exactly one {quick_group} window and an existing 8x condition")
     seed = seeds[0] if quick_seed is None else quick_seed
     if seed not in seeds:
         raise ValueError("QUICK_SEED must be in SEEDS")
     return [dict(peaks[0])], [8], [seed]
 
 
-def select_evaluation_windows(manifest, seconds=900, methods=None):
+def select_evaluation_windows(manifest, seconds=900, methods=None, *, split="test"):
     """Traffic-only selection, with rules declared before policy evaluation.
 
     These are reused exploratory evaluation groups, not newly untouched data.
     Typical = median-count nonempty block; burst = highest sub-bin request rate.
     """
-    methods = methods or {"mixed_traffic": "typical", "peak_heavy": "burst"}
+    if split not in ("validation", "test"):
+        raise ValueError("Evaluation split must be validation or test")
+    methods = methods or ({"validation": "burst"} if split == "validation" else
+                          {"mixed_traffic": "typical", "peak_heavy": "burst"})
     bin_s = manifest["range_config"]["episode_seconds"]
     if not math.isfinite(seconds) or seconds < bin_s or seconds % bin_s:
         raise ValueError("Evaluation duration must be a multiple of episode_seconds")
@@ -63,20 +66,20 @@ def select_evaluation_windows(manifest, seconds=900, methods=None):
     for group, method in methods.items():
         if method not in ("typical", "burst"):
             raise ValueError("Selection method must be typical or burst")
-        periods = [r for r in manifest["range_config"]["ranges"] if r["split"] == "test" and r["group"] == group]
+        periods = [r for r in manifest["range_config"]["ranges"] if r["split"] == split and r["group"] == group]
         if len(periods) != 1:
-            raise ValueError(f"Require one explicit test range for {group}")
+            raise ValueError(f"Require one explicit {split} range for {group}")
         period = periods[0]
         candidates = []
         origin, end = period["start_timestamp_s"], period["end_timestamp_s"]
         for index in range(int((end-origin) // seconds)):
             start = origin + index * seconds
-            selected = [b for b in bins if b["split"] == "test" and start <= b["start_timestamp_s"] < start + seconds]
+            selected = [b for b in bins if b["split"] == split and start <= b["start_timestamp_s"] < start + seconds]
             if sum(b["end_timestamp_s"]-b["start_timestamp_s"] for b in selected) != seconds:
                 raise ValueError("Manifest does not cover complete evaluation blocks")
             count = sum(b["requests"] for b in selected)
             if count:
-                candidates.append(dict(name=group, group=group, split="test", start_timestamp_s=start,
+                candidates.append(dict(name=group, group=group, split=split, start_timestamp_s=start,
                                        end_timestamp_s=start+seconds, requests=count, selection=method,
                                        peak_subbin_rps=max(b["requests"] / (b["end_timestamp_s"]-b["start_timestamp_s"])
                                                            for b in selected)))
@@ -88,8 +91,10 @@ def select_evaluation_windows(manifest, seconds=900, methods=None):
     return sorted(chosen, key=lambda w: w["start_timestamp_s"])
 
 
-def validate_evaluation_windows(manifest, windows):
+def validate_evaluation_windows(manifest, windows, *, split="test"):
     import re
+    if split not in ("validation", "test"):
+        raise ValueError("Evaluation split must be validation or test")
     if not windows:
         raise ValueError("Select evaluation windows first")
     names = set()
@@ -101,12 +106,12 @@ def validate_evaluation_windows(manifest, windows):
         start, end = window["start_timestamp_s"], window["end_timestamp_s"]
         if not all(math.isfinite(t) for t in (start, end)) or not start < end:
             raise ValueError("Invalid evaluation timestamps")
-        if window["split"] != "test" or not any(
-            r["split"] == "test" and r["group"] == window["group"]
+        if window["split"] != split or not any(
+            r["split"] == split and r["group"] == window["group"]
             and r["start_timestamp_s"] <= start < end <= r["end_timestamp_s"]
             for r in manifest["range_config"]["ranges"]
         ):
-            raise ValueError("Evaluation windows must lie within their explicit test group")
+            raise ValueError(f"Evaluation windows must lie within their explicit {split} group")
     ordered = sorted(windows, key=lambda w: w["start_timestamp_s"])
     if any(a["end_timestamp_s"] > b["start_timestamp_s"] for a, b in zip(ordered, ordered[1:])):
         raise ValueError("Evaluation windows overlap")
@@ -120,7 +125,8 @@ def _ttft_score(records, target):
 def run(training_dir, data_dir, output, windows, *, multipliers=(1, 4, 8), seeds=(7,),
         ttft_target_s=1.0, timeline_source_bin_s=60.0, max_requests=30000,
         epsilon=0.0, learning_rate=.0001, batch_size=64, warmup=256,
-        update_interval=4, capacity=50000, device="auto"):
+        update_interval=4, capacity=50000, device="auto", min_update_seconds=0.0,
+        min_new_outcomes=0, max_updates=None, evaluation_split="test"):
     """Every window/load/seed is independent; each policy cache is resumable.
 
     Baselines are seed-independent and run once per window/load. Each DQN copy
@@ -134,10 +140,14 @@ def run(training_dir, data_dir, output, windows, *, multipliers=(1, 4, 8), seeds
                     seeds=list(seeds), ttft_target_s=ttft_target_s, timeline_source_bin_s=timeline_source_bin_s,
                     max_requests=max_requests, epsilon=epsilon, learning_rate=learning_rate,
                     batch_size=batch_size, warmup=warmup, update_interval=update_interval,
-                    capacity=capacity, device=device)
+                    capacity=capacity, device=device, min_update_seconds=min_update_seconds,
+                    min_new_outcomes=min_new_outcomes, max_updates=max_updates, evaluation_split=evaluation_split)
 
 
 def _run(training_dir, data_dir, output, windows, **settings):
+    from llm_triage.rl.update_schedule import OnlineUpdateSchedule
+    OnlineUpdateSchedule(settings["update_interval"], settings["min_update_seconds"],
+                         settings["min_new_outcomes"], settings["max_updates"])
     for key in ("batch_size", "warmup", "update_interval", "capacity", "max_requests"):
         if type(settings[key]) is not int or settings[key] < 1:
             raise ValueError(f"Invalid {key}")
@@ -175,8 +185,8 @@ def _run(training_dir, data_dir, output, windows, **settings):
             record["manifest_sha256"] != sha256(manifest_path) or
             record["source_sha256"] != manifest["source_sha256"]):
         raise ValueError("Evaluation data differs from checkpoint training data")
-    validate_evaluation_windows(manifest, windows)
-    rows_by_window = load_selected_rows(trace, windows, allowed_splits=("test",))
+    validate_evaluation_windows(manifest, windows, split=settings["evaluation_split"])
+    rows_by_window = load_selected_rows(trace, windows, allowed_splits=(settings["evaluation_split"],))
     if any(len(rows) > settings["max_requests"] for rows in rows_by_window.values()):
         raise ValueError("Selected window exceeds max_requests; shorten windows")
     checkpoints = {}
@@ -190,7 +200,7 @@ def _run(training_dir, data_dir, output, windows, **settings):
     paths = [*sorted((root / "src/llm_triage").rglob("*.py")),
              *(root / "experiments" / name for name in ("adaptation_stress.py", "online_adaptation.py",
                                                         "baseline_capacity_sweep.py", "train_dqn.py", "run_pipeline.py"))]
-    identity = dict(protocol="independent_load_stress_v1", settings=settings, windows=windows,
+    identity = dict(protocol="independent_load_stress_v2", settings=settings, windows=windows,
                     training_record_sha256=sha256(record_path), checkpoints=checkpoints,
                     runtime=runtime,
                     code_sha256={p.relative_to(root).as_posix(): sha256(p) for p in paths})
@@ -199,8 +209,9 @@ def _run(training_dir, data_dir, output, windows, **settings):
     state_path = output / "run.json"
     if state_path.exists() and json.loads(state_path.read_text())["identity"] != identity:
         raise ValueError("Inputs/code/runtime changed; use a new RUN_NAME")
-    write_json(state_path, dict(status="running", identity=identity,
-                               interpretation="Exploratory reused evaluation windows, not an untouched final holdout"))
+    interpretation = ("Development/validation ablation, not a held-out score" if settings["evaluation_split"] == "validation"
+                      else "Exploratory reused evaluation windows, not an untouched final holdout")
+    write_json(state_path, dict(status="running", identity=identity, interpretation=interpretation))
     config = record["config"]
     hardware, profile = HardwareConfig(**config["hardware"]), ServiceProfile(**record["service_profile"])
     summaries, timelines, lengths, learning = [], [], [], []
@@ -238,7 +249,8 @@ def _run(training_dir, data_dir, output, windows, **settings):
                             simulation, stats = replay_dqn(training_dir / f"dqn_seed{seed}.npz", record, replay,
                                                            folder, policy, device=resolved_device,
                                                            **{k: settings[k] for k in ("epsilon", "learning_rate", "batch_size",
-                                                                                      "warmup", "update_interval", "capacity")}, seed=seed)
+                                                                                      "warmup", "update_interval", "capacity",
+                                                                                      "min_update_seconds", "min_new_outcomes", "max_updates")}, seed=seed)
                         metrics, diagnostics, timeline = diagnose_replay(
                             simulation, replay, config["slo_s"], settings["timeline_source_bin_s"] / multiplier,
                             settings["ttft_target_s"])
@@ -279,6 +291,6 @@ def _run(training_dir, data_dir, output, windows, **settings):
         write_csv(output / filename, [{k: row.get(k) for k in fields} for row in table])
     if any(sha256(training_dir / f"dqn_seed{s}.npz") != h for s, h in checkpoints.items()):
         raise RuntimeError("Source checkpoint changed")
-    write_json(state_path, dict(status="completed", identity=identity,
+    write_json(state_path, dict(status="completed", identity=identity, interpretation=interpretation,
                                files={f: sha256(output / f) for f in ("summary.csv", "timeline.csv", "length_groups.csv", "learning_summary.csv")}))
     return summaries

@@ -153,7 +153,8 @@ def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, re
     model = DQN(seed=seed, **config.get("agent", {}))
     print(f"seed={seed} learner={model.learner_runtime}", flush=True)
     initial = model.copy_weights()
-    replay_buffer = ReplayBuffer(REPLAY_CAPACITY, seed + 1000)
+    replay_buffer = ReplayBuffer(REPLAY_CAPACITY, seed + 1000,
+                                 include_elapsed_time=model.discount_mode == "elapsed_time")
     history, selection = [], []
     total_steps = 0
     learner_seconds = 0.0
@@ -190,10 +191,12 @@ def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, re
         done = False
         while not done:
             action = model.act(state, info["action_mask"], epsilon)
+            before_s = info["now_s"]
             next_state, value, done, truncated, next_info = env.step(action)
             if truncated:
                 raise RuntimeError("The finite trace environment truncated unexpectedly")
-            replay_buffer.add(state, action, value, next_state, done, next_info["action_mask"])
+            replay_buffer.add(state, action, value, next_state, done, next_info["action_mask"],
+                              elapsed_s=next_info["now_s"]-before_s)
             state, info = next_state, next_info
             total_steps += 1
             episode_reward += value

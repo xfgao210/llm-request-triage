@@ -18,6 +18,8 @@ from experiments.train_dqn import policy_options, write_csv, write_json
 from llm_triage.metrics import evaluate_events
 from llm_triage.metrics.summary import summarize_records
 from llm_triage.rl import RewardConfig, TriageEnv
+from llm_triage.rl.rewards import RewardBreakdown
+from llm_triage.rl.update_schedule import OnlineUpdateSchedule
 from llm_triage.rl.dqn import DQN, ReplayBuffer
 from llm_triage.simulation import HardwareConfig, ServiceProfile
 from llm_triage.workload.burstgpt import load_windows, sha256
@@ -26,7 +28,8 @@ from llm_triage.workload.transforms import replay_window
 
 def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.0,
                learning_rate=.0001, batch_size=64, warmup=256, update_interval=4,
-               capacity=50000, device="cpu"):
+               capacity=50000, device="cpu", min_update_seconds=0.0,
+               min_new_outcomes=0, max_updates=None):
     """One causal replay, shared by the legacy and resumable stress workflows.
 
     An interrupted replay restarts from the source checkpoint. We never resume
@@ -40,12 +43,18 @@ def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.
         "source_sha256", "trace_sha256", "manifest_sha256",
     )):
         raise ValueError("Checkpoint metadata differs from training record")
+    expected_agent = config.get("agent", {})
+    if (model.discount_mode != expected_agent.get("discount_mode", "decision")
+            or model.discount_time_unit_s != expected_agent.get("discount_time_unit_s", 1.0)
+            or model.gamma != expected_agent.get("gamma", .99)):
+        raise ValueError("Checkpoint discount semantics differ from training configuration")
     print(f"{policy} learner={model.learner_runtime}", flush=True)
     initial = model.copy_weights()
     model.rng = np.random.default_rng(seed)
     model.learning_rate = learning_rate
     model.gamma = config.get("agent", {}).get("gamma", .99)
-    buffer = ReplayBuffer(capacity, seed + 1000) if policy == "adapting" else None
+    buffer = (ReplayBuffer(capacity, seed + 1000, include_elapsed_time=model.discount_mode == "elapsed_time")
+              if policy == "adapting" else None)
     env = TriageEnv(replay, HardwareConfig(**config["hardware"]),
                     ServiceProfile(**record["service_profile"]),
                     estimated_output_tokens=record["estimated_output_tokens"],
@@ -53,14 +62,33 @@ def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.
                     **config["decisions"],
                     **policy_options(replay, config["decisions"], config.get("observation")))
     state, info = env.reset(seed=seed)
+    schedule = OnlineUpdateSchedule(update_interval, min_update_seconds, min_new_outcomes, max_updates,
+                                    last_time_s=info["now_s"])
     steps, observed_outcomes, learner_seconds = 0, 0, 0.0
     action_counts = [0, 0, 0]  # ADMIT, DEFER, DROP in canonical DQN order.
     source_time = lambda now: replay.source_origin_s + now / replay.time_scale
-    with (output / f"{policy}_updates.csv").open("w", newline="") as stream:
-        audit = csv.DictWriter(stream, fieldnames=["step", "source_timestamp_s", "updates", "loss", "buffer_size", "observed_outcomes"])
+    component_names = list(RewardBreakdown.__dataclass_fields__)
+    reward_totals = {k: 0.0 for k in component_names}
+    cumulative_reward, zero_time_steps = 0.0, 0
+    with (output / f"{policy}_updates.csv").open("w", newline="") as stream, (
+        output / f"{policy}_transitions.csv"
+    ).open("w", newline="") as transitions:
+        audit = csv.DictWriter(stream, fieldnames=["step", "sim_time_s", "source_timestamp_s", "updates", "loss", "buffer_size", "observed_outcomes",
+                                                  "seconds_since_update", "outcomes_since_update", "cumulative_reward", "max_weight_change"])
         audit.writeheader()
+        trace = csv.DictWriter(transitions, fieldnames=[
+            "step", "request_id", "action", "sim_before_s", "sim_after_s", "elapsed_s", "source_timestamp_s",
+            "bootstrap_discount", "terminal", "queue_before", "queue_after", "can_admit", "can_defer", "can_drop",
+            "q_admit", "q_defer", "q_drop", "new_outcomes", "other_request_outcomes", "observed_outcomes",
+            "updates", "updated", "reward_total", "cumulative_reward",
+            *[f"reward_{k}" for k in component_names],
+        ])
+        trace.writeheader()
         while not info["is_terminal"]:
             before = info["now_s"]
+            request_id = info["candidate_id"]
+            q_before = model.forward(state)
+            mask_before = info["action_mask"]
             action = model.act(state, info["action_mask"], epsilon if buffer is not None else 0)
             action_counts[int(action)] += 1
             next_state, reward, done, truncated, next_info = env.step(action)
@@ -72,16 +100,44 @@ def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.
                 raise RuntimeError("Future outcome exposed by environment")
             steps += 1
             observed_outcomes += len(next_info["outcomes"])
+            elapsed_s = next_info["now_s"]-before
+            zero_time_steps += elapsed_s == 0
+            cumulative_reward += reward
+            breakdown = next_info["reward_breakdown"]
+            for key in component_names:
+                reward_totals[key] += breakdown[key]
+            updated = False
             if buffer is not None:
                 # Current reward/outcomes are observed before any learner update.
-                buffer.add(state, action, reward, next_state, done, next_info["action_mask"])
-                if buffer.size >= warmup and steps % update_interval == 0:
+                buffer.add(state, action, reward, next_state, done, next_info["action_mask"], elapsed_s=elapsed_s)
+                if buffer.size >= warmup and schedule.ready(steps=steps, now_s=next_info["now_s"],
+                                                           outcomes=observed_outcomes, updates=model.updates):
                     update_started = time.monotonic()
                     loss = model.train_batch(buffer.sample(batch_size))
                     learner_seconds += time.monotonic() - update_started
-                    audit.writerow(dict(step=steps, source_timestamp_s=source_time(next_info["now_s"]),
+                    audit.writerow(dict(step=steps, sim_time_s=next_info["now_s"], source_timestamp_s=source_time(next_info["now_s"]),
                                         updates=model.updates, loss=loss, buffer_size=buffer.size,
-                                        observed_outcomes=observed_outcomes))
+                                        observed_outcomes=observed_outcomes,
+                                        seconds_since_update=next_info["now_s"]-schedule.last_time_s,
+                                        outcomes_since_update=observed_outcomes-schedule.last_outcomes,
+                                        cumulative_reward=cumulative_reward,
+                                        max_weight_change=max(float(np.max(np.abs(model.params[k]-v))) for k,v in initial.items())))
+                    schedule.mark(next_info["now_s"], observed_outcomes)
+                    updated = True
+            trace.writerow(dict(
+                step=steps, request_id=request_id, action=("ADMIT", "DEFER", "DROP")[int(action)],
+                sim_before_s=before, sim_after_s=next_info["now_s"], elapsed_s=elapsed_s,
+                source_timestamp_s=source_time(next_info["now_s"]),
+                bootstrap_discount=0.0 if done else float(model.bootstrap_discounts(elapsed_s)), terminal=bool(done),
+                queue_before=info["queue_length"], queue_after=next_info["queue_length"],
+                can_admit=bool(mask_before[0]), can_defer=bool(mask_before[1]), can_drop=bool(mask_before[2]),
+                q_admit=float(q_before[0]), q_defer=float(q_before[1]), q_drop=float(q_before[2]),
+                new_outcomes=len(next_info["outcomes"]),
+                other_request_outcomes=sum(str(o.request_id) != str(request_id) for o in next_info["outcomes"]),
+                observed_outcomes=observed_outcomes, updates=model.updates, updated=updated,
+                reward_total=reward, cumulative_reward=cumulative_reward,
+                **{f"reward_{k}": breakdown[k] for k in component_names},
+            ))
             state, info = next_state, next_info
             if steps % 100000 == 0:
                 print(f"{policy}: decisions={steps}, updates={model.updates}, source_time={source_time(info['now_s']):.1f}", flush=True)
@@ -89,13 +145,17 @@ def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.
     if policy == "frozen" and (model.updates or change):
         raise RuntimeError("Frozen copy was modified")
     settings = dict(seed=seed, epsilon=epsilon, learning_rate=learning_rate, batch_size=batch_size,
-                    warmup=warmup, update_interval=update_interval, capacity=capacity, device=device)
+                    warmup=warmup, update_interval=update_interval, capacity=capacity, device=device,
+                    min_update_seconds=min_update_seconds, min_new_outcomes=min_new_outcomes, max_updates=max_updates,
+                    discount_mode=model.discount_mode, discount_time_unit_s=model.discount_time_unit_s, gamma=model.gamma)
     model.save(output / f"{policy}_final.npz", dict(metadata, online_adaptation=policy == "adapting",
                online_settings=settings, learner_runtime=model.learner_runtime))
     stats = dict(policy=policy, decisions=steps, updates=model.updates,
                  admit_actions=action_counts[0], defer_actions=action_counts[1], drop_actions=action_counts[2],
                  learner_device=model.device, learner_seconds=learner_seconds,
                  observed_outcomes=observed_outcomes, max_weight_change=change,
+                 cumulative_reward=cumulative_reward, zero_time_steps=zero_time_steps,
+                 discount_mode=model.discount_mode, **{f"reward_{k}": v for k,v in reward_totals.items()},
                  wall_seconds=time.monotonic()-started, final_source_timestamp_s=source_time(info["now_s"]))
     return env.result(), stats
 

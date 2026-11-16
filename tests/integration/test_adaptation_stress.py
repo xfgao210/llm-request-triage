@@ -255,13 +255,52 @@ def test_full_adaptation_notebook_on_small_trace(stress_data, tmp_path, monkeypa
         assert {r["multiplier"] for r in rows} == {"8"}
         assert {r["arrivals"] for r in rows} == {"120"}
     assert namespace["REPORT"].stat().st_size > 10000
-    assert len(namespace["generated_figures"]) == (9 if mode == "full" else 5)
+    diagnostic_figures = len(namespace["evaluation_windows"]) * len(namespace["ACTIVE_EVAL_MULTIPLIERS"]) * 2 * len(namespace["ACTIVE_SEEDS"])
+    assert len(namespace["generated_figures"]) == (9 if mode == "full" else 5) + diagnostic_figures
     with zipfile.ZipFile(namespace["ARCHIVE"]) as archive:
         names = archive.namelist()
         assert "online_report.html" in names
         assert "execution_plan.json" in names
         assert "stress_comparison/length_groups.csv" in names
+        assert any(name.endswith("adapting_transitions.csv") for name in names)
         assert not any("burstgpt_windows.csv" in name or "BurstGPT_3.csv" in name for name in names)
+
+
+@pytest.mark.parametrize("evaluation_split", ["test", "validation"])
+def test_time_discount_and_budget_audit_end_to_end(stress_data, tmp_path, evaluation_split):
+    data, manifest, config, _, _ = stress_data
+    config["agent"] = dict(discount_mode="elapsed_time", discount_time_unit_s=1.0, gamma=.99)
+    training = tmp_path / "time-training"
+    train(config, data, training)
+    source = training / "training/dqn_seed7.npz"
+    source_digest = sha256(source)
+    windows = stress.select_evaluation_windows(manifest, seconds=300, split=evaluation_split)[:1]
+    output = tmp_path / "budgeted"
+    stress.run(training / "training", data, output, windows, multipliers=[4], batch_size=4, warmup=8,
+               update_interval=4, min_update_seconds=.1, min_new_outcomes=2, max_updates=2, device="cpu",
+               evaluation_split=evaluation_split)
+    group = "mixed_traffic" if evaluation_split == "test" else "validation"
+    folder = output / group / "load_4/adapting_seed7"
+    with (folder / "adapting_updates.csv").open() as stream:
+        updates = list(csv.DictReader(stream))
+    assert 0 < len(updates) <= 2
+    assert all(float(row["seconds_since_update"]) >= .1 for row in updates)
+    assert all(int(row["outcomes_since_update"]) >= 2 for row in updates)
+    with (folder / "adapting_transitions.csv").open() as stream:
+        transitions = list(csv.DictReader(stream))
+    for row in transitions:
+        dt = float(row["elapsed_s"])
+        expected = 0.0 if row["terminal"] == "True" else .99**dt
+        assert float(row["bootstrap_discount"]) == pytest.approx(expected)
+        components = [float(value) for key,value in row.items() if key.startswith("reward_") and key != "reward_total"]
+        assert sum(components) == pytest.approx(float(row["reward_total"]))
+    stats = json.loads((folder / "learning.json").read_text())
+    assert stats["cumulative_reward"] == pytest.approx(sum(float(row["reward_total"]) for row in transitions))
+    assert stats["admit_actions"] + stats["defer_actions"] + stats["drop_actions"] == len(transitions)
+    assert sha256(source) == source_digest
+    with (output / group / "load_4/frozen_seed7/frozen_transitions.csv").open() as stream:
+        frozen = list(csv.DictReader(stream))
+    assert all(int(row["updates"]) == 0 and row["updated"] == "False" for row in frozen)
 
 
 def test_quick_mode_filters_conditions_without_changing_windows(stress_data):

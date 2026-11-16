@@ -40,12 +40,13 @@ def test_auto_and_required_cuda(monkeypatch):
 
 
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
-def test_tensor_update_matches_numpy_and_checkpoints_are_portable(device, tmp_path):
+@pytest.mark.parametrize("discount_mode", ["decision", "elapsed_time"])
+def test_tensor_update_matches_numpy_and_checkpoints_are_portable(device, discount_mode, tmp_path):
     torch = pytest.importorskip("torch")
     if device == "cuda" and not torch.cuda.is_available():
         pytest.skip("No CUDA runtime on this machine")
     from llm_triage.rl.devices import TensorLearner
-    reference, accelerated = DQN(seed=7), DQN(seed=7)
+    reference, accelerated = DQN(seed=7, discount_mode=discount_mode), DQN(seed=7, discount_mode=discount_mode)
     learner = TensorLearner(accelerated, device)
     # Exercise the public accelerated dispatch/target-sync path even on a CPU
     # test machine. CUDA tensors themselves are tested only when available.
@@ -62,6 +63,10 @@ def test_tensor_update_matches_numpy_and_checkpoints_are_portable(device, tmp_pa
             done[:] = True  # Empty nonterminal batch must not bootstrap masked terminals.
         batch = (states, rng.integers(len(ACTIONS), size=16), rng.normal(size=16),
                  states * 0.5, done, masks)
+        if discount_mode == "elapsed_time":
+            durations = rng.uniform(0, 4, size=16)
+            durations[::3] = 0
+            batch += (durations,)
         loss = reference.train_batch(batch)
         other = accelerated.train_batch(batch)
         assert other == pytest.approx(loss, rel=1e-9, abs=1e-10)
@@ -71,5 +76,6 @@ def test_tensor_update_matches_numpy_and_checkpoints_are_portable(device, tmp_pa
     accelerated.save(path, dict(features=list(FULL_FEATURE_NAMES), actions=[a.value for a in ACTIONS]))
     restored, _ = DQN.load(path, device="cpu")
     assert restored.device == "cpu"
+    assert restored.discount_mode == discount_mode
     for key in reference.params:
         np.testing.assert_array_equal(accelerated.params[key], restored.params[key])

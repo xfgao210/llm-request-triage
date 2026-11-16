@@ -44,6 +44,10 @@ The default quick mode runs only the unchanged 8× peak condition with all five
 policies and one seed; full mode enables the entire configured comparison.
 Quick mode does not thin requests or shorten windows. Shorter, undertrained
 smoke-test training is a separate explicit option.
+The stability workflow adds consistent elapsed-time bootstrapping, a conservative
+online-update budget, and reward/action/Q-value diagnostics. These are development
+ablation controls, not a demonstrated policy improvement; changing discount
+semantics requires fresh training. Reward weights and the default traffic stay fixed.
 Only the CSV is required; no prior
 results ZIP is needed. See the [protocol](docs/online_adaptation.md).
 Both notebooks offer `DEVICE="auto"` (CUDA minibatch learning when available,
