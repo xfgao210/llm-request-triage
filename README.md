@@ -44,6 +44,12 @@ Both notebooks offer `DEVICE="auto"` (CUDA minibatch learning when available,
 CPU fallback), or explicit `cpu`/`cuda`. Simulation remains CPU-based; GPU mode
 is optional and may not be faster for this small network.
 
+Before retraining, use the [baseline capacity notebook](notebooks/colab_burstgpt3_capacity_sweep.ipynb)
+to compare FCFS, length-aware, and static SLO-aware on short development windows
+at increasing arrival rates. It diagnoses deadline misses and queueing, caches
+completed cases, and exports a team report without training or replaying the
+held-out test groups. See the [capacity sweep guide](docs/baseline_capacity_sweep.md).
+
 From a checkout with Python 3.11 or 3.12, install the package and run:
 
 ```bash
