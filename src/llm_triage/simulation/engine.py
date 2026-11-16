@@ -182,6 +182,8 @@ class TriageKernel:
         service_estimator: Optional[Callable[[ int, float], float]] = None,
         priority_fn: Optional[Callable[[RequestView], object]] = None,
         record_iterations: bool = True,
+        skip_blocked_admits: bool = False,
+        drop_blocked_candidate: Optional[Callable[[RequestView], bool]] = None,
     ) -> None:
         self.hw = hardware or HardwareConfig()
         self.profile = profile or ServiceProfile()
@@ -202,6 +204,8 @@ class TriageKernel:
         self._service_estimator = service_estimator
         self._priority_fn = priority_fn
         self.record_iterations = bool(record_iterations)
+        self._skip_blocked_admits = skip_blocked_admits
+        self._drop_blocked_candidate = drop_blocked_candidate
 
         # Initialized in reset()
         self.requests: List[Request] = []
@@ -589,11 +593,16 @@ class TriageKernel:
         if self._active_count() >= self.hw.max_batch_size or self.kv.blocks_free == 0:
             return []
         eligible: List[Request] = []
+        free_tokens = self.kv.blocks_free * self.hw.kv_block_size
         for r in self.queue:
             if r.request_id in self._deferred_in_pass:
                 continue
             cooldown = self._defer_until.get(r.request_id)
             if cooldown is not None and self.now < cooldown - 1e-12:
+                continue
+            if (self._skip_blocked_admits and r.input_tokens > free_tokens
+                    and (self._drop_blocked_candidate is None
+                         or not self._drop_blocked_candidate(self._view(r)))):
                 continue
             eligible.append(r)
         return eligible
@@ -819,6 +828,8 @@ def simulate(
     estimated_output_tokens: Optional[float] = None,
     service_estimator: Optional[Callable[[int, float], float]] = None,
     record_iterations: bool = True,
+    skip_blocked_admits: bool = False,
+    drop_blocked_candidate: Optional[Callable[[RequestView], bool]] = None,
 ) -> SimResult:
     """Run one simulation episode to completion.
 
@@ -853,6 +864,12 @@ def simulate(
         for policy-visible service time estimation.
     record_iterations:
         Keep a per-iteration trace in ``SimResult.iterations``.
+    skip_blocked_admits:
+        Omit no-op blocked ADMIT callbacks and their decision events for fixed
+        policies whose action and priority depend only on each candidate.
+    drop_blocked_candidate:
+        With ``skip_blocked_admits``, keep blocked candidates that the policy
+        would drop. Leave unset for policies that only admit.
     """
     priority_fn = getattr(callback, "priority", None)
     kernel = TriageKernel(
@@ -865,6 +882,8 @@ def simulate(
         service_estimator=service_estimator,
         priority_fn=priority_fn,
         record_iterations=record_iterations,
+        skip_blocked_admits=skip_blocked_admits,
+        drop_blocked_candidate=drop_blocked_candidate,
     )
     kernel.reset(workload)
     while not kernel.is_terminal():

@@ -33,8 +33,10 @@ class SlackAdmission(LengthAwareScheduler):
     cutoff: float
 
     def decide(self, snapshot):
-        slack = snapshot.candidate.estimated_slack_s(snapshot.now_s)
-        return Action.DROP if slack < self.cutoff else Action.ADMIT
+        return Action.DROP if self.should_drop(snapshot.candidate) else Action.ADMIT
+
+    def should_drop(self, candidate):
+        return candidate.estimated_slack_s() < self.cutoff
 
 
 def mean_rows(rows, keys, metrics):
@@ -47,7 +49,8 @@ def mean_rows(rows, keys, metrics):
             for group, values in groups.items()]
 
 
-def capacity_scan(cases, hardware_configs, profile, estimate, decisions, slo):
+def capacity_scan(cases, hardware_configs, profile, estimate, decisions, slo, *,
+                  policy_names=None, skip_blocked_admits=False):
     rows = []
     fields = ("slo_attainment", "window_goodput_rps", "drop_rate", "p95_queue_wait_s",
               "mean_queue_in_window", "busy_fraction_in_window", "kv_utilization_in_window",
@@ -55,7 +58,14 @@ def capacity_scan(cases, hardware_configs, profile, estimate, decisions, slo):
     for mode, hardware in hardware_configs.items():
         for window, rate, replay in cases:
             for policy, scheduler in baseline_schedulers().items():
+                if policy_names is not None and policy not in policy_names:
+                    continue
+                drop_blocked = None
+                if policy == "static_slo_aware":
+                    drop_blocked = lambda candidate: candidate.estimated_slack_s() < 0
                 result = simulate(replay.requests, scheduler, hardware, profile,
+                                  skip_blocked_admits=skip_blocked_admits,
+                                  drop_blocked_candidate=drop_blocked,
                                   estimated_output_tokens=estimate, **decisions)
                 summary, _, _ = diagnose_replay(result, replay, slo, 10.0)
                 rows.append(dict(capacity=mode, window=window, rate=rate, policy=policy,
@@ -75,7 +85,7 @@ def choose_rates(summary):
     return RATES[index - 1:index + 2], knee
 
 
-def admission(cases, models, config, estimate, hardware, profile):
+def admission(cases, models, config, estimate, hardware, profile, *, skip_blocked_admits=False):
     rows = []
     for window, rate, replay in cases:
         policies = {"length_aware": LengthAwareScheduler()}
@@ -87,7 +97,10 @@ def admission(cases, models, config, estimate, hardware, profile):
         })
         long_ids = {str(r.request_id) for r in replay.requests if r.output_tokens > 128}
         for name, scheduler in policies.items():
+            skip = skip_blocked_admits and name not in models
+            drop_blocked = scheduler.should_drop if isinstance(scheduler, SlackAdmission) else None
             result = simulate(replay.requests, scheduler, hardware, profile, record_iterations=False,
+                              skip_blocked_admits=skip, drop_blocked_candidate=drop_blocked,
                               estimated_output_tokens=estimate, **config["decisions"])
             evaluation = evaluate_events(result.events, measurement_window_s=replay.horizon_s)
             summary = evaluation.summary
