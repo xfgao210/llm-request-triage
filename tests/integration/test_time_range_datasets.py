@@ -191,3 +191,53 @@ def test_online_copy_learns_only_after_step_and_keeps_source_frozen(range_data, 
     assert len(timeline) == 6  # Includes the ordinary group's empty bin for both copies.
     with pytest.raises(FileExistsError):
         run(training / "training", data, output)
+
+
+def test_paste_in_baselines_reuse_dqn_and_match_continuous_cohorts(range_data, tmp_path, monkeypatch):
+    from pathlib import Path
+    import zipfile
+    matplotlib = pytest.importorskip("matplotlib")
+    pytest.importorskip("pandas")
+    matplotlib.use("Agg", force=True)
+    from experiments.run_pipeline import run as train
+    from experiments.online_adaptation import run
+    from llm_triage.rl.dqn import DQN
+    from llm_triage.workload.burstgpt import sha256
+    import llm_triage.simulation as simulation
+
+    source, analysis, _, path = range_data
+    data, training, output = tmp_path / "data", tmp_path / "training", tmp_path / "online"
+    prepare_ranges(source, analysis, data, path)
+    config = dict(dataset="burstgpt3", seeds=[7], episodes=2, validate_every=1,
+                  target_rps=[None], slo_s=5, hardware={"max_batch_size": 4},
+                  decisions={"defer_retry_s": 0.25, "max_defers": 5}, reward={})
+    train(config, data, training)
+    # Test reuse of the exact saved group/prefix selection, not default ranges.
+    run(training / "training", data, output, groups=["ordinary"], max_seconds_per_group=450,
+        warmup=16, batch_size=8, device="cpu")
+    before = {p.name: sha256(p) for p in output.iterdir() if p.is_file()}
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Completed DQN replay or baseline cache was repeated")
+
+    monkeypatch.setattr(DQN, "act", forbidden)
+    monkeypatch.setattr(DQN, "train_batch", forbidden)
+    script = (Path(__file__).resolve().parents[2] / "notebooks/colab_add_continuous_baselines.py").read_text()
+    namespace = dict(ONLINE_OUTPUT=output, TRAINING_DIR=training / "training", DATA_DIR=data, IS_COLAB=False)
+    exec(compile(script, "paste_in_baselines", "exec"), namespace)
+    summary = namespace["unified_summary"]
+    assert len(summary) == 5
+    assert set(summary["policy"]) == {"fcfs", "length_aware", "static_slo_aware", "frozen", "adapting"}
+    assert (summary["arrivals"] == 300).all()
+    assert (summary["measurement_window_s"] == 450).all()
+    assert len(namespace["unified_timeline"]) == 10  # Includes partial empty bins.
+    assert before == {p.name: sha256(p) for p in output.iterdir() if p.is_file()}
+    with zipfile.ZipFile(namespace["UNIFIED_ARCHIVE"]) as archive:
+        assert "unified_report.html" in archive.namelist()
+        assert not any("burstgpt_windows.csv" in name for name in archive.namelist())
+    monkeypatch.setattr(simulation, "simulate", forbidden)
+    exec(compile(script, "paste_in_baselines", "exec"), namespace)
+    cache = namespace["UNIFIED_DIR"] / "fcfs/summary.csv"
+    cache.write_text(cache.read_text() + "\n")
+    with pytest.raises(AssertionError, match="Cached baseline output changed"):
+        exec(compile(script, "paste_in_baselines", "exec"), namespace)

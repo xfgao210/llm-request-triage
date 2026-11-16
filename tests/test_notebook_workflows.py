@@ -37,3 +37,11 @@ def test_combined_notebook_code_cells_compile_without_saved_outputs():
             compile("".join(cell["source"]), cell["id"], "exec")
             assert cell["execution_count"] is None
             assert not cell["outputs"]
+
+
+def test_baseline_cell_matches_standalone_paste_in_patch():
+    online = cells("colab_burstgpt3_online_adaptation.ipynb")
+    patch = (ROOT / "notebooks/colab_add_continuous_baselines.py").read_text()
+    assert online["baseline-addon"] == patch
+    assert list(online).index("baseline-addon") > list(online).index("export")
+    assert "RUN_RULE_BASELINES = True" in online["parameters"]

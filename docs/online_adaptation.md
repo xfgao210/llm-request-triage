@@ -84,6 +84,25 @@ they never feed earlier actions. Goodput counts on-time completions of a
 group's own arrivals within that interval, excluding completions crossing its
 end. Completion-SLO attainment includes eventual completions after the end.
 
+## Add missing baselines without repeating DQN runs
+
+The notebook's final section adds FCFS, length-aware and static SLO-aware on
+the same continuous test traffic, then exports a five-policy report, charts,
+CSV summary/timelines, and `unified_results.zip`. `RUN_RULE_BASELINES=True`
+enables it by default. Each baseline runs in its own independent simulation;
+none shares a queue or resources with another policy. Completed baseline
+results are cached individually and verified before reuse.
+
+For an already completed Colab run using the older notebook, copy the entire
+contents of `notebooks/colab_add_continuous_baselines.py` into one new cell at
+the bottom and run only that cell. No repository update is needed for this
+standalone patch. Do not rerun settings, training, or DQN comparison cells.
+The original `ONLINE_OUTPUT`, `TRAINING_DIR`, and `DATA_DIR` folders must still
+exist in the runtime; the downloaded HTML alone is insufficient. Exact ranges,
+prefix settings, hardware, SLOs, service profile, and train-only length estimate
+come from saved artifacts, not possibly edited notebook settings. Outputs go
+to a separate `unified_comparison/` folder and do not modify original results.
+
 This is an online evaluation protocol, not a frozen held-out score. Choose
 adaptation settings on a different development stream and report multiple
 starting seeds. Do not repeatedly tune against these test outcomes and then
