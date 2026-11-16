@@ -183,8 +183,11 @@ class ObservationConfig:
     horizon_clip_max: float = 5.0
     log_token_scale: float = 10.0
     log_queue_scale: float = 5.0
+    include_episode_progress: bool = True
 
     def __post_init__(self) -> None:
+        if type(self.include_episode_progress) is not bool:
+            raise ValueError("include_episode_progress must be a boolean")
         if self.preset not in ("full", "compact_7"):
             raise ValueError(f"preset must be 'full' or 'compact_7', got {self.preset!r}")
         for name in (
@@ -366,7 +369,10 @@ class ObservationBuilder:
         input_log = _clip(math.log1p(inp_tokens) / cfg.log_token_scale, 0.0, 5.0)
         queue_log = _clip(math.log1p(queue_len) / cfg.log_queue_scale, 0.0, 5.0)
         defer_ratio = _clip(defer_count / max(1, cfg.max_defers), 0.0, 1.0)
-        progress = _clip(now_s / cfg.horizon_s, 0.0, cfg.horizon_clip_max)
+        # Keep the feature slot/checkpoint dimension stable. Disabling the clock
+        # removes dependence on arbitrary training versus replay horizon lengths.
+        progress = (_clip(now_s / cfg.horizon_s, 0.0, cfg.horizon_clip_max)
+                    if cfg.include_episode_progress else 0.0)
 
         if cfg.preset == "compact_7":
             est_out_scaled = _clip(est_out_tokens / 1000.0, 0.0, 10.0)

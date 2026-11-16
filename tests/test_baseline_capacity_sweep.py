@@ -135,6 +135,20 @@ def test_capacity_notebook_is_clean_and_compiles():
             assert cell["outputs"] == []
 
 
+def test_setup_imports_src_without_installed_package():
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    notebook = json.loads((root / "notebooks/colab_burstgpt3_capacity_sweep.ipynb").read_text())
+    setup = next("".join(cell["source"]) for cell in notebook["cells"] if cell["id"] == "setup")
+    # No PYTHONPATH, user site, or editable-install startup hooks. This models
+    # the running kernel before it has processed a newly installed .pth file.
+    result = subprocess.run([sys.executable, "-I", "-S", "-c", setup], cwd=root,
+                            capture_output=True, text=True, check=True)
+    assert str(root / "src/llm_triage/__init__.py") in result.stdout
+
+
 def test_entire_notebook_with_small_trace(capacity_data, tmp_path, monkeypatch):
     pytest.importorskip("pandas")
     pytest.importorskip("IPython")

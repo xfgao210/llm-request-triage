@@ -1,4 +1,4 @@
-"""Keep the combined Colab workflow self-contained without changing training."""
+"""Retain ingestion while explicitly versioning mixed-load training and replay."""
 
 import json
 from pathlib import Path
@@ -16,14 +16,16 @@ def test_online_notebook_trains_before_adapting_without_archive_input():
     offline = cells("colab_burstgpt3_experiments.ipynb")
     online = cells("colab_burstgpt3_online_adaptation.ipynb")
     assert list(online).index("train") < list(online).index("run")
-    for name in ("source", "data", "train", "learning-charts", "validation-charts"):
+    for name in ("source", "data", "learning-charts", "validation-charts"):
         assert online[name] == offline[name]
     assert "TRAINING_ARCHIVE" not in "\n".join(online.values())
     assert "archive_path" not in online["export"]
-    assert "MAX_SECONDS_PER_GROUP = None" in online["parameters"]
-    assert "RUN_ONLINE_EXPERIMENT = True" in online["parameters"]
+    assert "EVAL_WINDOW_SECONDS = 900" in online["parameters"]
+    assert "EVAL_ARRIVAL_MULTIPLIERS = [1, 4, 8]" in online["parameters"]
     assert 'DEVICE = "auto"' in online["parameters"]
-    assert '"--device", DEVICE' in online["run"]
+    assert "device=DEVICE" in online["run"]
+    assert 'observation={"include_episode_progress": False}' in online["train"]
+    assert "arrival_multipliers=TRAIN_ARRIVAL_MULTIPLIERS" in online["train"]
     assert 'train_config.setdefault("agent", {})["device"] = DEVICE' in online["train"]
     for text in ("training.csv", "checkpoints.csv", "validation.csv", "TRAIN_CONFIG_PATH"):
         assert text in online["export"]
@@ -39,9 +41,10 @@ def test_combined_notebook_code_cells_compile_without_saved_outputs():
             assert not cell["outputs"]
 
 
-def test_baseline_cell_matches_standalone_paste_in_patch():
+def test_five_policy_stress_replaces_legacy_baseline_addon():
     online = cells("colab_burstgpt3_online_adaptation.ipynb")
-    patch = (ROOT / "notebooks/colab_add_continuous_baselines.py").read_text()
-    assert online["baseline-addon"] == patch
-    assert list(online).index("baseline-addon") > list(online).index("export")
-    assert "RUN_RULE_BASELINES = True" in online["parameters"]
+    assert "baseline-addon" not in online
+    assert "experiments.adaptation_stress" in online["run"]
+    for metric in ("p99_ttft_s", "ttft_target_attainment", "first_token_coverage"):
+        assert metric in online["charts"]
+    assert "length_groups" in online["export"]

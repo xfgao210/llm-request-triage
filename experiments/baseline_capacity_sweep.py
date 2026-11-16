@@ -105,12 +105,12 @@ def validate_windows(manifest, windows):
         raise ValueError("Development windows must not overlap")
 
 
-def load_selected_rows(trace_path, windows):
+def load_selected_rows(trace_path, windows, *, allowed_splits=("train", "validation")):
     """Stream prepared data; do not load the full test trace into memory."""
     selected = {w["name"]: [] for w in windows}
     with Path(trace_path).open(newline="") as stream:
         for row in csv.DictReader(stream):
-            if row["split"] not in ("train", "validation"):
+            if row["split"] not in allowed_splits:
                 continue
             timestamp = float(row["timestamp_s"])
             for w in windows:
@@ -131,7 +131,7 @@ def _percentile(values, fraction):
     return ordered[lower] + (ordered[math.ceil(position)] - ordered[lower]) * (position - lower)
 
 
-def _diagnose(result, replay, slo_s, timeline_bin_s):
+def diagnose_replay(result, replay, slo_s, timeline_bin_s, ttft_target_s=None):
     evaluation = evaluate_events(result.events, measurement_window_s=replay.horizon_s)
     records = evaluation.request_records
     requests = result.by_id()
@@ -147,6 +147,12 @@ def _diagnose(result, replay, slo_s, timeline_bin_s):
         diagnostics.append(dict(
             request_id=str(record.request_id), arrival_time_s=record.arrival_time_s,
             slo_met=bool(record.slo_met), status=record.status.value,
+            ttft_s=record.ttft_s, input_tokens=request.input_tokens,
+            # Offline grouping only; never supplied to a policy.
+            output_length_group=("short" if request.output_tokens <= 32 else
+                                 "medium" if request.output_tokens <= 128 else "long"),
+            input_length_group=("short" if request.input_tokens <= 512 else
+                                "medium" if request.input_tokens <= 2048 else "long"),
             queue_wait_s=wait, completion_latency_s=record.completion_latency_s,
             isolated_service_s=alone, isolated_exceeds_slo=alone > slo_s,
         ))
@@ -184,6 +190,7 @@ def _diagnose(result, replay, slo_s, timeline_bin_s):
         row["kv_utilization"] = row.pop("kv_area") / duration / result.hardware.kv_total_blocks
     n = len(diagnostics)
     extra = dict(
+        first_token_coverage=sum(d["ttft_s"] is not None for d in diagnostics) / n,
         p95_queue_wait_s=_percentile(waits, .95), queue_wait_observed=len(waits),
         isolated_exceeds_slo=sum(d["isolated_exceeds_slo"] for d in diagnostics),
         isolated_exceeds_slo_fraction=sum(d["isolated_exceeds_slo"] for d in diagnostics) / n,
@@ -198,6 +205,12 @@ def _diagnose(result, replay, slo_s, timeline_bin_s):
         full_replay_wasted_gpu_s=result.wasted_gpu_time,
         full_replay_wasted_gpu_fraction=(result.wasted_gpu_time / result.gpu_busy_time if result.gpu_busy_time else 0.0),
     )
+    if ttft_target_s is not None:
+        if not math.isfinite(ttft_target_s) or ttft_target_s <= 0:
+            raise ValueError("TTFT target must be positive and finite")
+        extra.update(ttft_target_s=ttft_target_s,
+                     ttft_target_met=sum(d["ttft_s"] is not None and d["ttft_s"] <= ttft_target_s for d in diagnostics),
+                     ttft_target_attainment=sum(d["ttft_s"] is not None and d["ttft_s"] <= ttft_target_s for d in diagnostics) / n)
     return dict(evaluation.summary, **extra), diagnostics, timeline
 
 
@@ -269,7 +282,7 @@ def run_sweep(data_dir, destination, windows, *, multipliers=(1, 2, 4, 8), slo_s
                     result = simulate(replay.requests, scheduler, hardware, profile,
                                       estimated_output_tokens=estimate, record_iterations=True,
                                       expire_overdue_in_queue=False)
-                    metrics, diagnostics, timeline = _diagnose(result, replay, slo_s, timeline_bin_s)
+                    metrics, diagnostics, timeline = diagnose_replay(result, replay, slo_s, timeline_bin_s)
                     summary = dict(window=window["name"], split=window["split"], multiplier=multiplier,
                                    policy=policy, native_mean_rps=len(rows) / span,
                                    offered_rps=len(rows) / replay.horizon_s,

@@ -28,6 +28,7 @@ def run(training_dir, data_dir, output, *, split="validation", target_rps=None, 
         ) for rate in target_rps) or len(set(target_rps)) != len(target_rps)):
             raise ValueError("Evaluation rates must be unique, positive and finite, or null for native timing")
         config["target_rps"] = target_rps
+        config.pop("arrival_multipliers", None)  # Explicit absolute-RPS override.
     cohorts, estimate, provenance = load_cohorts(data_dir / "processed", config, splits=(split,))
     if any(record.get(key) != value for key, value in provenance.items()):
         raise ValueError("Prepared scenarios differ from the training dataset")
@@ -55,25 +56,32 @@ def run(training_dir, data_dir, output, *, split="validation", target_rps=None, 
     if not models:
         raise ValueError("No frozen checkpoints found")
     rows = evaluate(models, cohorts[split], HardwareConfig(**config["hardware"]),
-                    ServiceProfile(**record["service_profile"]), estimate, config["decisions"], baselines=True)
+                    ServiceProfile(**record["service_profile"]), estimate, config["decisions"], baselines=True,
+                    observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config)
     for row in rows:
         item = layout.get(row["window"], {})
         row.update(split=split, scenario_id=item.get("scenario_id", str(row["window"])),
                    traffic_regime=item.get("traffic_regime", "unfiltered"), group=item.get("group", split),
                    start_timestamp_s=item.get("start_timestamp_s"), end_timestamp_s=item.get("end_timestamp_s"),
-                   measurement_window_s=horizons[row["window"], row["target_rps"]])
+                   measurement_window_s=horizons[row["window"], row[
+                       "arrival_multiplier" if "arrival_multipliers" in config else "target_rps"]])
     summaries = []
+    load_field = "arrival_multiplier" if "arrival_multipliers" in config else "target_rps"
     for label, regime, policy, rate in dict.fromkeys(
-        (row["group"], row["traffic_regime"], row["policy"], row["target_rps"]) for row in rows
+        (row["group"], row["traffic_regime"], row["policy"], row[load_field]) for row in rows
     ):
-        group = [row for row in rows if (row["group"], row["traffic_regime"], row["policy"], row["target_rps"])
+        group = [row for row in rows if (row["group"], row["traffic_regime"], row["policy"], row[load_field])
                  == (label, regime, policy, rate)]
         empty = [item for item in manifest.get("empty_windows", [])
                  if item["split"] == split and item.get("group", split) == label]
+        if split in config.get("cohort_window_limit", {}):
+            # Sampling nonempty episodes does not select all intervening idle bins.
+            empty = []
         idle_duration = sum(item["end_timestamp_s"] - item["start_timestamp_s"] for item in empty)
-        duration = sum(row["measurement_window_s"] for row in group) + (idle_duration if rate is None else 0)
+        idle_scaled = idle_duration / rate if load_field == "arrival_multiplier" else (idle_duration if rate is None else 0)
+        duration = sum(row["measurement_window_s"] for row in group) + idle_scaled
         requests = sum(row["arrivals"] for row in group)
-        summaries.append(dict(group=label, traffic_regime=regime, policy=policy, target_rps=rate, windows=len(group),
+        summaries.append(dict(group=label, traffic_regime=regime, policy=policy, **{load_field: rate}, windows=len(group),
                               empty_episodes=len(empty), native_empty_duration_s=idle_duration,
                               requests=requests, evaluated_duration_s=duration,
                               overall_slo_attainment=sum(row["slo_met"] for row in group) / requests,

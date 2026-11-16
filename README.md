@@ -37,8 +37,14 @@ It prepares explicit time ranges, trains and validates DQN, optionally evaluates
 frozen test scenarios, and exports charts and a shareable HTML report.
 For a separate past-feedback-only experiment, use the
 [online adaptation notebook](notebooks/colab_burstgpt3_online_adaptation.ipynb).
-It includes offline training and validation, then compares frozen and adapting
-copies on identical chronological traffic. Only the CSV is required; no prior
+It trains clock-disabled models at mixed arrival loads, then compares all three
+baselines with frozen/adapting DQN at 1×/4×/8× load on short paired windows.
+It includes TTFT/coverage metrics, per-policy caching and a unified report.
+The default quick mode runs only the unchanged 8× peak condition with all five
+policies and one seed; full mode enables the entire configured comparison.
+Quick mode does not thin requests or shorten windows. Shorter, undertrained
+smoke-test training is a separate explicit option.
+Only the CSV is required; no prior
 results ZIP is needed. See the [protocol](docs/online_adaptation.md).
 Both notebooks offer `DEVICE="auto"` (CUDA minibatch learning when available,
 CPU fallback), or explicit `cpu`/`cuda`. Simulation remains CPU-based; GPU mode
