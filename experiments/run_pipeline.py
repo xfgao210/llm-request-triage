@@ -168,7 +168,8 @@ def run_locked(config, data_dir, output, *, source=None, resume=False):
         hardware = HardwareConfig(**config["hardware"])
         rows = evaluate(models, cohorts["validation"], hardware, ServiceProfile(),
                         estimate, config["decisions"], baselines=True,
-                        observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config)
+                        observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config,
+                        candidate_order=config.get("rl_candidate_order", "fcfs"))
         write_csv(output / "validation.csv", rows)
         # Every row should match the evaluation recorded by the training entry point.
         if (output / "validation.csv").read_bytes() != (training_dir / "validation.csv").read_bytes():

@@ -66,6 +66,28 @@ def test_disabled_clock_keeps_shape_and_is_horizon_invariant():
         ObservationConfig(include_episode_progress=0)
 
 
+@pytest.mark.parametrize("order,expected", [("fcfs", "a-long"), ("length_aware", "b-short")])
+def test_candidate_order_matches_env_and_validation_callback(order, expected):
+    from llm_triage.rl import RLPolicyCallback
+
+    replay = ReplayWindow((Request("a-long", 0, 1000, 4, 5),
+                           Request("b-short", 0, 16, 4, 5)), 30, 0, 1)
+    decisions = dict(max_defers=5, defer_retry_s=.25)
+    options = policy_options(replay, decisions, candidate_order=order)
+    env = TriageEnv(replay, **decisions, **options)
+    _, info = env.reset()
+    assert info["candidate_id"] == expected
+    views = []
+    for request in replay.requests:
+        single = TriageEnv([request])
+        single.reset()
+        views.append(single.snapshot().candidate)
+    callback = RLPolicyCallback(DQN(), **options)
+    assert min(views, key=callback.priority).request_id == expected
+    with pytest.raises(ValueError, match="rl_candidate_order"):
+        policy_options(replay, decisions, candidate_order="typo")
+
+
 def test_multiplier_cohorts_and_balanced_training(stress_data, tmp_path):
     data, _, config, _, _ = stress_data
     cohorts, estimate, _ = load_cohorts(data / "processed", config)
@@ -231,7 +253,7 @@ def test_full_adaptation_notebook_on_small_trace(stress_data, tmp_path, monkeypa
             text = text.replace('RUN_MODE = "quick"', f'RUN_MODE = "{mode}"')
             text = text.replace('QUICK_TRAINING = False', f'QUICK_TRAINING = {short_training}')
             text = text.replace('EPISODES = 24', 'EPISODES = 6')
-            text = text.replace('VALIDATE_EVERY = 12', 'VALIDATE_EVERY = 3')
+            text = text.replace('VALIDATE_EVERY = 4', 'VALIDATE_EVERY = 3')
         if cell["id"] == "data":
             text = text.replace('(REPO / "configs/burstgpt3_ranges.json")', "fixture_ranges")
         exec(compile(text, cell["id"], "exec"), namespace)
@@ -262,16 +284,36 @@ def test_full_adaptation_notebook_on_small_trace(stress_data, tmp_path, monkeypa
         assert "online_report.html" in names
         assert "execution_plan.json" in names
         assert "stress_comparison/length_groups.csv" in names
+        assert "training_run/training/training_updates_seed7.csv" in names
         assert any(name.endswith("adapting_transitions.csv") for name in names)
         assert not any("burstgpt_windows.csv" in name or "BurstGPT_3.csv" in name for name in names)
 
 
 @pytest.mark.parametrize("evaluation_split", ["test", "validation"])
-def test_time_discount_and_budget_audit_end_to_end(stress_data, tmp_path, evaluation_split):
+@pytest.mark.parametrize("candidate_order", ["fcfs", "length_aware"])
+def test_time_discount_and_budget_audit_end_to_end(stress_data, tmp_path, evaluation_split, candidate_order, monkeypatch):
     data, manifest, config, _, _ = stress_data
+    config["rl_candidate_order"] = candidate_order
+    config["reward"] = {"drop": .5}
+    original_step = TriageEnv.step
+
+    def checked_step(self, action):
+        assert self.candidate_selector == candidate_order
+        assert self.reward_config.drop == .5
+        return original_step(self, action)
+
+    monkeypatch.setattr(TriageEnv, "step", checked_step)
     config["agent"] = dict(discount_mode="elapsed_time", discount_time_unit_s=1.0, gamma=.99)
     training = tmp_path / "time-training"
     train(config, data, training)
+    with (training / "training/training_updates_seed7.csv").open() as stream:
+        training_updates = list(csv.DictReader(stream))
+    assert training_updates
+    assert [int(row["update"]) for row in training_updates] == list(range(1, len(training_updates) + 1))
+    assert all(np.isfinite(float(row["loss"])) for row in training_updates)
+    checkpoint_record = json.loads((training / "training/run.json").read_text())
+    assert checkpoint_record["config"]["rl_candidate_order"] == candidate_order
+    assert checkpoint_record["reward_config"]["drop"] == .5
     source = training / "training/dqn_seed7.npz"
     source_digest = sha256(source)
     windows = stress.select_evaluation_windows(manifest, seconds=300, split=evaluation_split)[:1]
@@ -297,6 +339,7 @@ def test_time_discount_and_budget_audit_end_to_end(stress_data, tmp_path, evalua
     stats = json.loads((folder / "learning.json").read_text())
     assert stats["cumulative_reward"] == pytest.approx(sum(float(row["reward_total"]) for row in transitions))
     assert stats["admit_actions"] + stats["defer_actions"] + stats["drop_actions"] == len(transitions)
+    assert stats["reward_drop"] == pytest.approx(-.5 * stats["drop_actions"])
     assert sha256(source) == source_digest
     with (output / group / "load_4/frozen_seed7/frozen_transitions.csv").open() as stream:
         frozen = list(csv.DictReader(stream))

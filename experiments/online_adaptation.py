@@ -60,7 +60,8 @@ def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.
                     estimated_output_tokens=record["estimated_output_tokens"],
                     reward_config=RewardConfig(**record["reward_config"]),
                     **config["decisions"],
-                    **policy_options(replay, config["decisions"], config.get("observation")))
+                    **policy_options(replay, config["decisions"], config.get("observation"),
+                                     config.get("rl_candidate_order", "fcfs")))
     state, info = env.reset(seed=seed)
     schedule = OnlineUpdateSchedule(update_interval, min_update_seconds, min_new_outcomes, max_updates,
                                     last_time_s=info["now_s"])

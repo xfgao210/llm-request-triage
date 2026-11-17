@@ -323,3 +323,28 @@ python -m experiments.online_adaptation \
 ```
 
 The CLI defaults to complete ranges when `--max-seconds-per-group` is omitted.
+
+## Candidate-order and drop-penalty ablations
+
+The adaptation notebook exposes `RL_CANDIDATE_ORDER` (`fcfs` or `length_aware`)
+and `DROP_PENALTY` (default `0.2`). They are recorded as top-level
+`rl_candidate_order` and `reward.drop` in the training configuration. Ordering
+is applied consistently to training, checkpoint validation, pipeline reload
+evaluation, and frozen/adapting replay. Static baselines retain their own rules.
+Changing either setting requires fresh training and a unique `RUN_NAME`.
+
+Start with separate validation-data runs: FCFS ordering/drop=0.2, then
+length-aware ordering/drop=0.2. With the selected ordering held fixed, compare
+drop=0.5 and drop=1.0. These are untuned experiment values, not recommended
+optimal penalties. Set `EVALUATION_SPLIT="validation"` for development.
+Do not silently compare checkpoints trained under different semantics as a
+pure online-adaptation effect. No hard drop-rate cap is implemented.
+
+The notebook now validates every four episodes and displays every checkpoint's
+validation attainment/drop rate. Checkpoint selection remains based on mean
+per-window validation SLO attainment, not loss. Per-seed
+`training_updates_seed*.csv` files record each update's loss, global step,
+episode, epsilon and episode-local simulated time; they are included in the
+export ZIP. The loss plot uses learner updates and a 50-update moving average.
+The validation setting increases evaluation overhead but does not change the
+training episode budget. Older run folders lack these logs; use a new run.
