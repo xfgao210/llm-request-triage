@@ -122,7 +122,7 @@ def policy_options(replay, decisions, observation=None, candidate_selector="fcfs
 
 
 def evaluate(models, cases, hardware, profile, estimate, decisions, *, baselines=False,
-             observation=None, multiplier_mode=False, candidate_selector="fcfs"):
+             observation=None, multiplier_mode=False, candidate_selector="fcfs", burst_switch_config=None):
     rows = []
     for window, rate, replay in cases:
         policies = baseline_schedulers() if baselines else {}
@@ -130,6 +130,14 @@ def evaluate(models, cases, hardware, profile, estimate, decisions, *, baselines
             name: RLPolicyCallback(model, **policy_options(replay, decisions, observation, candidate_selector))
             for name, model in models.items()
         })
+        if burst_switch_config is not None:
+            from llm_triage.scheduling import BurstSwitchScheduler
+            policies.update({
+                f"switch_{name}": BurstSwitchScheduler(
+                    RLPolicyCallback(model, **policy_options(replay, decisions, observation, candidate_selector)),
+                    burst_switch_config,
+                ) for name, model in models.items()
+            })
         executor = SimulatorExecutor(
             replay.requests, hardware, profile, estimated_output_tokens=estimate,
             **decisions,
@@ -146,6 +154,14 @@ def evaluate(models, cases, hardware, profile, estimate, decisions, *, baselines
             rows.append(dict(policy=name, window=window,
                              **({"arrival_multiplier": rate} if multiplier_mode else {"target_rps": rate}),
                              **{key: result.summary[key] for key in METRICS}))
+            if burst_switch_config is not None:
+                policy = policies[name]
+                counts = getattr(policy, "decisions", {})
+                switches = getattr(policy, "switches", [])
+                rows[-1].update(switch_count=len(switches),
+                                fcfs_decisions=counts.get("fcfs", 0),
+                                custom_decisions=counts.get("custom", 0),
+                                switch_trace_json=json.dumps(switches, sort_keys=True))
     return rows
 
 

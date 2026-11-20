@@ -12,7 +12,8 @@ from llm_triage.simulation import HardwareConfig, ServiceProfile
 from llm_triage.workload.burstgpt import sha256
 
 
-def run(training_dir, data_dir, output, *, split="validation", target_rps=None, groups=None):
+def run(training_dir, data_dir, output, *, split="validation", target_rps=None, groups=None,
+        burst_switch_config=None):
     if split not in {"validation", "test"}:
         raise ValueError("Evaluate validation or test scenarios only")
     if output.exists():
@@ -57,7 +58,9 @@ def run(training_dir, data_dir, output, *, split="validation", target_rps=None, 
         raise ValueError("No frozen checkpoints found")
     rows = evaluate(models, cohorts[split], HardwareConfig(**config["hardware"]),
                     ServiceProfile(**record["service_profile"]), estimate, config["decisions"], baselines=True,
-                    observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config)
+                    observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config,
+                    candidate_selector=config.get("candidate_selector", "fcfs"),
+                    burst_switch_config=burst_switch_config)
     for row in rows:
         item = layout.get(row["window"], {})
         row.update(split=split, scenario_id=item.get("scenario_id", str(row["window"])),
@@ -98,6 +101,7 @@ def run(training_dir, data_dir, output, *, split="validation", target_rps=None, 
     write_csv(output / "summary.csv", summaries)
     write_json(output / "run.json", dict(split=split, training_dir=str(training_dir),
                config=config, groups=groups, checkpoints=before,
+               burst_switch_config=vars(burst_switch_config) if burst_switch_config is not None else None,
                empty_episode_handling="Skipped execution; included in overall_goodput_rps duration for native timing only",
                **provenance))
     return rows
@@ -113,9 +117,15 @@ def main():
     rates.add_argument("--target-rps", type=float, nargs="+", help="Override evaluation load only")
     rates.add_argument("--native", action="store_true", help="Use source timing regardless of training rates")
     parser.add_argument("--groups", nargs="+", help="Evaluate selected named groups from the requested split")
+    parser.add_argument("--burst-switch-config", type=Path,
+                        help="Compare frozen DQN with causal FCFS/DQN switching using this JSON config")
     args = parser.parse_args()
+    from llm_triage.scheduling import BurstSwitchConfig
+    switch_config = (BurstSwitchConfig(**json.loads(args.burst_switch_config.read_text(encoding="utf-8")))
+                     if args.burst_switch_config else None)
     rows = run(args.training_dir, args.data_dir, args.output, split=args.split,
-               target_rps=[None] if args.native else args.target_rps, groups=args.groups)
+               target_rps=[None] if args.native else args.target_rps, groups=args.groups,
+               burst_switch_config=switch_config)
     print(f"Completed {len(rows)} frozen policy runs. Results: {args.output / 'summary.csv'}")
 
 

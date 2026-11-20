@@ -88,6 +88,10 @@ checkpoints, checks their hashes, and runs the paired test comparison. See
 
 ## Components
 
+- [Burst-aware FCFS / frozen-DQN switching](docs/burst_switching.md): causal
+  arrival-rate detection, hysteresis, per-episode switch traces, and paired
+  validation against fixed policies. Development thresholds require validation.
+
 - [Workload pipeline and original Week 1 handoff](docs/week1-hengyi.md).
 - [Simulator architecture](docs/simulator.md): continuous batching, paged
   KV-cache allocation, recompute preemption, and a steppable kernel.

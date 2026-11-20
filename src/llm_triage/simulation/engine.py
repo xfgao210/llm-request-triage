@@ -181,6 +181,7 @@ class TriageKernel:
         estimated_output_tokens: Optional[float] = None,
         service_estimator: Optional[Callable[[ int, float], float]] = None,
         priority_fn: Optional[Callable[[RequestView], object]] = None,
+        arrival_observer: Optional[Callable[[float], None]] = None,
         record_iterations: bool = True,
         skip_blocked_admits: bool = False,
         drop_blocked_candidate: Optional[Callable[[RequestView], bool]] = None,
@@ -203,6 +204,7 @@ class TriageKernel:
         )
         self._service_estimator = service_estimator
         self._priority_fn = priority_fn
+        self._arrival_observer = arrival_observer
         self.record_iterations = bool(record_iterations)
         self._skip_blocked_admits = skip_blocked_admits
         self._drop_blocked_candidate = drop_blocked_candidate
@@ -443,6 +445,8 @@ class TriageKernel:
             req.state = RequestState.QUEUED
             self.queue.append(req)
             self._next += 1
+            if self._arrival_observer is not None:
+                self._arrival_observer(req.arrival_time)
             self._emit(
                 EventType.ARRIVAL,
                 req.request_id,
@@ -872,6 +876,9 @@ def simulate(
         would drop. Leave unset for policies that only admit.
     """
     priority_fn = getattr(callback, "priority", None)
+    reset_episode = getattr(callback, "reset_episode", None)
+    if reset_episode is not None:
+        reset_episode()
     kernel = TriageKernel(
         hardware=hardware,
         profile=profile,
@@ -881,6 +888,7 @@ def simulate(
         estimated_output_tokens=estimated_output_tokens,
         service_estimator=service_estimator,
         priority_fn=priority_fn,
+        arrival_observer=getattr(callback, "observe_arrival", None),
         record_iterations=record_iterations,
         skip_blocked_admits=skip_blocked_admits,
         drop_blocked_candidate=drop_blocked_candidate,
