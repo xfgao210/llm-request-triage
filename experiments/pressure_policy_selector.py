@@ -105,7 +105,7 @@ def training_labels(cases, custom_factory, hardware, profile, estimate, decision
 
 
 def evaluate_cases(cases, custom_factory, tree, hardware, profile, estimate, decisions,
-                   switch_config, rules):
+                   switch_config, rules, *, load_unit="rps", policy_names=None):
     rows = []
     for window, rate, replay in cases:
         burst_custom, learned_custom = custom_factory(replay), custom_factory(replay)
@@ -122,6 +122,8 @@ def evaluate_cases(cases, custom_factory, tree, hardware, profile, estimate, dec
         }
         long_ids = {str(r.request_id) for r in replay.requests if r.output_tokens > 128}
         for name, policy in policies.items():
+            if policy_names is not None and name not in policy_names:
+                continue
             tracker = policy.selector if isinstance(policy, CappedSelector) else None
             kernel = make_replay(policy, hardware, profile, estimate, decisions, tracker)
             result = kernel.run(replay.requests)
@@ -141,7 +143,8 @@ def evaluate_cases(cases, custom_factory, tree, hardware, profile, estimate, dec
                              switches=len(tracker.switches) if tracker is not None else 0,
                              admit_decisions=counts.get("fcfs", 0), dqn_decisions=counts.get("custom", 0),
                              switch_trace_json=json.dumps(tracker.switches if tracker is not None else [], sort_keys=True)))
-        print(f"validation window={window} rps={rate}", flush=True)
+            print(f"finished window={window} {load_unit}={rate} policy={name}", flush=True)
+        print(f"evaluation window={window} {load_unit}={rate}", flush=True)
     return rows
 
 

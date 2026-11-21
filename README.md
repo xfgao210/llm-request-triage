@@ -94,6 +94,8 @@ checkpoints, checks their hashes, and runs the paired test comparison. See
 - [KV-pressure selector comparison](docs/pressure_policy_selector.md): the
   existing 4,096-token scenario and standard-cache control, with common
   length ordering and the original causal 5% drop allowance.
+- [Full peak-heavy window at native 1x / 8x traffic](docs/traffic_8x.md):
+  all 10,435 requests, frozen policies and explicit multiplier semantics.
 
 - [Burst-aware FCFS / frozen-DQN switching](docs/burst_switching.md): causal
   arrival-rate detection, hysteresis, per-episode switch traces, and paired
