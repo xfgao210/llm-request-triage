@@ -1,0 +1,58 @@
+{
+  "config": {
+    "agent": {
+      "discount_mode": "elapsed_time",
+      "gamma": 0.99,
+      "hidden": 32,
+      "learning_rate": 0.001
+    },
+    "candidate_selector": "length_aware",
+    "decisions": {
+      "defer_retry_s": 0.25,
+      "max_defers": 5
+    },
+    "episodes": 24,
+    "hardware": {
+      "gpu_name": "validation-kv-stress-4096-tokens",
+      "kv_block_size": 16,
+      "kv_total_blocks": 256,
+      "max_batch_size": 4
+    },
+    "observation": {
+      "include_episode_progress": false
+    },
+    "reward": {},
+    "seeds": [
+      7,
+      17,
+      27
+    ],
+    "slo_s": 5.0,
+    "target_rps": [
+      1.2,
+      2.4,
+      4.8
+    ],
+    "validate_every": 8
+  },
+  "data": {
+    "manifest_sha256": "a90bf7724176790cb6847315e4c4b3a4db003bc9eab6a090f756990b08232977",
+    "source_sha256": "46fc9480ef0b748ecb2b51d512ff08c196b031782cbe6f78e28044d768e86d5a",
+    "trace_sha256": "d76a69b0fe6f21b6d9f975631d78a85c03cf2244554252605f11a6d6dc25e44c"
+  },
+  "knee": 2.4,
+  "online": {
+    "epsilon": 0.0,
+    "learning_rate": 1e-05,
+    "max_updates": 100,
+    "min_new_outcomes": 32,
+    "min_update_seconds": 1.0,
+    "update_interval": 32,
+    "warmup": 2048
+  },
+  "rates": [
+    1.2,
+    2.4,
+    4.8
+  ]
+}

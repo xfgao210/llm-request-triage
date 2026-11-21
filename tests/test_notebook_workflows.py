@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def cells(name):
-    notebook = json.loads((ROOT / "notebooks" / name).read_text())
+    notebook = json.loads((ROOT / "notebooks" / name).read_text(encoding="utf-8"))
     return {cell["id"]: "".join(cell["source"]) for cell in notebook["cells"]}
 
 
@@ -36,7 +36,7 @@ def test_online_notebook_trains_before_adapting_without_archive_input():
 
 def test_combined_notebook_code_cells_compile_without_saved_outputs():
     path = ROOT / "notebooks/colab_burstgpt3_online_adaptation.ipynb"
-    notebook = json.loads(path.read_text())
+    notebook = json.loads(path.read_text(encoding="utf-8"))
     for cell in notebook["cells"]:
         if cell["cell_type"] == "code":
             compile("".join(cell["source"]), cell["id"], "exec")
