@@ -1,0 +1,306 @@
+{
+  "candidate_order": "length_aware",
+  "checkpoints": {
+    "dqn_seed17.npz": "eacc196fe69c62b73ddb22e11d0758a3f285b6e4ed05dab163e0d18f8402b51a",
+    "dqn_seed27.npz": "ab7e9691bb2666759f09b03da443720faaa6f2445d5ccf6ca4dccb795ca6fd4c",
+    "dqn_seed7.npz": "389691509804d224befc0719b92913bbbedc91f316c4eda376a20de0b5bae68a"
+  },
+  "code_sha256": {
+    "experiments/confirm_scheduling.py": "ace2f0e116ab6919bd772aa6ac764b20ced08fd9a1f9bda2f9f7b859fb81688e",
+    "experiments/kv_pressure_study.py": "c0f9b1d268cb32d23fce1dd1cae00baddbca52ea576d687668a0c6e0203aa2cb",
+    "experiments/pressure_policy_selector.py": "49824a71a006939de729e8fbd0822377a20e5663e7e4cb601c8c35b3e47314b3",
+    "experiments/scheduling_study.py": "b5c352e8372041bf23abee523a85bae0c9cd2f094ee500d7c3cf317abe84a8db",
+    "experiments/train_dqn.py": "411308857d30208d0c7f19c11148d23fd43e029907baaca7c167fa35086d9161",
+    "experiments/train_policy_selector.py": "e6329608914299fc9b063fae38ada4609c7302dfc29b06c16ecc27e4ee3ea3ca",
+    "src/llm_triage/__init__.py": "ca85e1fb437b740f695963a8b5f27e1dfddca04a75e9717d0266d032058736dd",
+    "src/llm_triage/evaluation/__init__.py": "7125e35dc1c0c202653e7904944224c70d2eb1da833cf77002d0e0c9d7c86f9c",
+    "src/llm_triage/evaluation/reporting.py": "61c3cab3b9002f80aa03657d2689e64ecf3dbf28f0d211eeb29433a46eb394f3",
+    "src/llm_triage/evaluation/runner.py": "f0210a9f9822d2abe30198b2639b3c00be0a77da04eb4d8cc6901e0be569e5f0",
+    "src/llm_triage/metrics/__init__.py": "06f105040442343edff152cadbe6e85d9f21a72db8f595e7c01084d8783d0a09",
+    "src/llm_triage/metrics/collector.py": "39ba27f272d4469daf5390e64e77e7860211bcace075f03ed056051bbe82159f",
+    "src/llm_triage/metrics/schemas.py": "8d7af7f69158e5e93f2737fa858ce390cd480554210aaf830d4070c155aac5f5",
+    "src/llm_triage/metrics/summary.py": "88e4e61e2889bb1db5afe8b0a708b6507e49bdbab0361bf42a72a76944268d48",
+    "src/llm_triage/rl/__init__.py": "a63fdc7ac4ddd0e4bfc1faaeb22a6decc40415c554998d38f88b7f32adde5fda",
+    "src/llm_triage/rl/devices.py": "7a3152727205970bd342ad57cc8ae2f520235954db3077d784e46fb718994cd4",
+    "src/llm_triage/rl/dqn.py": "142791ea92a801a17bb46236e0f65f571736eef164d495bed89d6150bffac120",
+    "src/llm_triage/rl/environment.py": "7fd4ff5a9ebbf0f26df360815787f114de503d6d5b39c6db525c98f6bea3196f",
+    "src/llm_triage/rl/masking.py": "bea547f29c1693eb1c3b8e55f7f08c76438ee083bbb3b2d32d9de98f6fe8c6a7",
+    "src/llm_triage/rl/observation.py": "448cc3858a2e712824a4e2f4c04c03e2e7c7c1ed9907c721f8e551129fc8dd9c",
+    "src/llm_triage/rl/rewards.py": "6411644799cac2e9962a950c211238dc8c562cd2fa54a24406582543b7856579",
+    "src/llm_triage/rl/update_schedule.py": "0f1a3c9c063e152223988ca6292ed8bda3650fd6f43aa2de9baead5ca72d3668",
+    "src/llm_triage/scheduling/__init__.py": "4e288b5e5ac1b254b9f451d82c513409e78ac40df1e41a849689bced9629cace",
+    "src/llm_triage/scheduling/baselines.py": "90449418584ddedc69a177cbcd02830cc9811873a05f7cd6d8da15e785d30ebc",
+    "src/llm_triage/scheduling/burst_switch.py": "0ccf095e6176558b2302803a34a5c56be49578c9790724b5adbb6775b0e64be7",
+    "src/llm_triage/scheduling/fcfs.py": "8ec5d673fc0a11cf7076bb798c95ff5b005429999ad6ef761f574c669202954a",
+    "src/llm_triage/scheduling/length_aware.py": "3456ef7c00d698d06b449612bd787e5f8a631079a26124a5293f024f5d74778a",
+    "src/llm_triage/scheduling/policy_selector.py": "ef162fa9368844817453205c0ee3f49f838afc39abf8dcb95f83b84908bed52d",
+    "src/llm_triage/scheduling/slo_aware.py": "041ec21e00a045f5d988701bf718a5a34071466b52e0e71c96e89ba068760edd",
+    "src/llm_triage/simulation/__init__.py": "a81e733b1c7e08e8f0c51ee2ba29bcde7bc26e510fcf14964371d8f8e1e47373",
+    "src/llm_triage/simulation/baselines.py": "2285673c1e68db008b7af075301f9442e9a4eb7bde2953c15568de1e310d3bb9",
+    "src/llm_triage/simulation/callback.py": "283e8bac8f8f2464cdfaa9408c8f070e097125c4d9d85a5da000977e7e510587",
+    "src/llm_triage/simulation/engine.py": "43c8d53ff3b477d07532856146b679af2cef5019d817fafbf160294df7ab2355",
+    "src/llm_triage/simulation/hardware.py": "7ce54cc394705a29f5c2312e9583a30edb3def1b031560801abcd797d2d4ea80",
+    "src/llm_triage/simulation/profile.py": "ec3839ff9370c70fcac2f10bfe82355479cb86dcf1f4f2bc96bd421eb5e866e7",
+    "src/llm_triage/simulation/request.py": "e3697a5770ade04d17b77f37e0938f1ed8708a033c8290a4bf64275bfe3cd51e",
+    "src/llm_triage/workload/__init__.py": "e657c30842cd11d1726e621f88402b51b89a5cf3a9bbabb0889f82f65a64945c",
+    "src/llm_triage/workload/burstgpt.py": "2ce9270019e6fafe86760097db743dcf7159ff77d5359648241eff722a0796b7",
+    "src/llm_triage/workload/synthetic.py": "bdedc32b36f011cb793401ebfbd4b84f5aae6eceac6ace5157007693299ce7be",
+    "src/llm_triage/workload/time_ranges.py": "2460f8746e655685f453d0a52c52325bd6d7c3783de0b0ad11e000510b97872a",
+    "src/llm_triage/workload/transforms.py": "5943bbb639cf6326ac21bebee80177fe9773f6dcf2eb449036b43bb57c0e29df"
+  },
+  "config": {
+    "agent": {
+      "discount_mode": "elapsed_time",
+      "gamma": 0.99,
+      "hidden": 32,
+      "learning_rate": 0.001
+    },
+    "candidate_selector": "length_aware",
+    "decisions": {
+      "defer_retry_s": 0.25,
+      "max_defers": 5
+    },
+    "episodes": 24,
+    "hardware": {
+      "gpu_name": "RTX-5070-12GB/Qwen2.5-0.5B",
+      "kv_block_size": 16,
+      "kv_total_blocks": 48059,
+      "max_batch_size": 32
+    },
+    "observation": {
+      "include_episode_progress": false
+    },
+    "reward": {},
+    "seeds": [
+      7,
+      17,
+      27
+    ],
+    "slo_s": 5.0,
+    "target_rps": [
+      2.4,
+      4.8,
+      9.6
+    ],
+    "validate_every": 8
+  },
+  "drop_denominator": 20,
+  "enter_probability": 0.7,
+  "evaluation_split": "validation",
+  "exit_probability": 0.4,
+  "label_counts": [
+    {
+      "dqn_losses": 55,
+      "dqn_wins": 0,
+      "samples": 260,
+      "seed": 7,
+      "ties": 205
+    },
+    {
+      "dqn_losses": 36,
+      "dqn_wins": 1,
+      "samples": 260,
+      "seed": 17,
+      "ties": 223
+    },
+    {
+      "dqn_losses": 49,
+      "dqn_wins": 2,
+      "samples": 260,
+      "seed": 27,
+      "ties": 209
+    }
+  ],
+  "label_objective": "additional on-time completions after draining identical bounded cohort; ties use admit-only",
+  "lookahead_s": 10.0,
+  "manifest_sha256": "eae49027357829ba62e5e976550cd4295057bea9faf6d90a44f0376d57e88464",
+  "max_depth": 3,
+  "min_samples_leaf": 10,
+  "numpy": "2.5.5",
+  "protocol_git_ref": "76a2933a9fc8b4378aebbbd03cf2b1d959b5c2f9",
+  "protocol_sha256": "8214c2b6e2211ed5adc972b93cabab31e0d1c0974bb0f70e1692f0dce0535985",
+  "rules": {
+    "2.4": "length_aware",
+    "4.8": "length_aware",
+    "9.6": "length_aware"
+  },
+  "samples_per_case": 6,
+  "selector_training_split": "train",
+  "sklearn": "1.9.1",
+  "source_sha256": "2299986a07388aa303ec2c41d1131e756db650a39ed6ef9dfe7cc3d7f9a43b8f",
+  "study_dir": "results\\runs\\kv-pressure-standard",
+  "test_evaluated": false,
+  "trace_sha256": "a39372e8e8b6037be624a6320702baaa2bdcdf5fa662ebd6bf4c0969184680a4",
+  "train_cases": [
+    {
+      "load": 2.4,
+      "window": 76
+    },
+    {
+      "load": 4.8,
+      "window": 76
+    },
+    {
+      "load": 9.6,
+      "window": 76
+    },
+    {
+      "load": 2.4,
+      "window": 1021
+    },
+    {
+      "load": 4.8,
+      "window": 1021
+    },
+    {
+      "load": 9.6,
+      "window": 1021
+    },
+    {
+      "load": 2.4,
+      "window": 1526
+    },
+    {
+      "load": 4.8,
+      "window": 1526
+    },
+    {
+      "load": 9.6,
+      "window": 1526
+    },
+    {
+      "load": 2.4,
+      "window": 1924
+    },
+    {
+      "load": 4.8,
+      "window": 1924
+    },
+    {
+      "load": 9.6,
+      "window": 1924
+    },
+    {
+      "load": 2.4,
+      "window": 2753
+    },
+    {
+      "load": 4.8,
+      "window": 2753
+    },
+    {
+      "load": 9.6,
+      "window": 2753
+    },
+    {
+      "load": 2.4,
+      "window": 2966
+    },
+    {
+      "load": 4.8,
+      "window": 2966
+    },
+    {
+      "load": 9.6,
+      "window": 2966
+    },
+    {
+      "load": 2.4,
+      "window": 3150
+    },
+    {
+      "load": 4.8,
+      "window": 3150
+    },
+    {
+      "load": 9.6,
+      "window": 3150
+    },
+    {
+      "load": 2.4,
+      "window": 3333
+    },
+    {
+      "load": 4.8,
+      "window": 3333
+    },
+    {
+      "load": 9.6,
+      "window": 3333
+    }
+  ],
+  "validation_cases": [
+    {
+      "load": 2.4,
+      "window": 3500
+    },
+    {
+      "load": 4.8,
+      "window": 3500
+    },
+    {
+      "load": 9.6,
+      "window": 3500
+    },
+    {
+      "load": 2.4,
+      "window": 3540
+    },
+    {
+      "load": 4.8,
+      "window": 3540
+    },
+    {
+      "load": 9.6,
+      "window": 3540
+    },
+    {
+      "load": 2.4,
+      "window": 3580
+    },
+    {
+      "load": 4.8,
+      "window": 3580
+    },
+    {
+      "load": 9.6,
+      "window": 3580
+    },
+    {
+      "load": 2.4,
+      "window": 3678
+    },
+    {
+      "load": 4.8,
+      "window": 3678
+    },
+    {
+      "load": 9.6,
+      "window": 3678
+    },
+    {
+      "load": 2.4,
+      "window": 3719
+    },
+    {
+      "load": 4.8,
+      "window": 3719
+    },
+    {
+      "load": 9.6,
+      "window": 3719
+    },
+    {
+      "load": 2.4,
+      "window": 3763
+    },
+    {
+      "load": 4.8,
+      "window": 3763
+    },
+    {
+      "load": 9.6,
+      "window": 3763
+    }
+  ]
+}

@@ -88,6 +88,13 @@ checkpoints, checks their hashes, and runs the paired test comparison. See
 
 ## Components
 
+- [Small learned FCFS / DQN selector](docs/policy_selector.md): offline
+  same-state rollouts, a shallow decision tree, and paired validation against
+  fixed policies and burst-based switching.
+- [KV-pressure selector comparison](docs/pressure_policy_selector.md): the
+  existing 4,096-token scenario and standard-cache control, with common
+  length ordering and the original causal 5% drop allowance.
+
 - [Burst-aware FCFS / frozen-DQN switching](docs/burst_switching.md): causal
   arrival-rate detection, hysteresis, per-episode switch traces, and paired
   validation against fixed policies. Development thresholds require validation.
