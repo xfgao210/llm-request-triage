@@ -5,7 +5,6 @@ import json
 
 import pytest
 
-pytest.importorskip("gymnasium")
 pytest.importorskip("numpy")
 
 import experiments.run_pipeline as pipeline
@@ -93,3 +92,21 @@ def test_output_lock_excludes_a_second_run(tmp_path):
         with pytest.raises(RuntimeError, match="Another pipeline process"):
             with pipeline.run_lock(tmp_path):
                 pytest.fail("Second process acquired the run lock")
+
+
+def test_notebook_training_loop_with_cpu_test_mode_and_ranked_comparison(fixture_run):
+    config, data, output = fixture_run
+    result = pipeline.run_training_loop(
+        cpu_test_mode=True,
+        include_ranked=True,
+        config=config,
+        data_dir=data,
+        output=output,
+    )
+    assert (output / "comparison.csv").is_file()
+    assert (output / "training/dqn_seed7.npz").is_file()
+    assert (output / "training/dqn_ranked_seed7.npz").is_file()
+    groups = [row["policy_group"] for row in result["comparison_rows"]]
+    assert groups == ["fcfs", "length_aware", "rl_policy", "rl_policy_ranked"]
+    policies = {row["policy"] for row in result["validation_rows"]}
+    assert policies == {"fcfs", "length_aware", "static_slo_aware", "dqn_seed7", "dqn_ranked_seed7"}

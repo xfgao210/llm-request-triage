@@ -52,6 +52,7 @@ class RequestView:
     preemption_count: int
     estimated_output_tokens: float = 144.0
     estimated_service_s: float = 0.1
+    output_length_rank: float = 0.5
 
     # ---- TECH_DESIGN.md §7.2 compatibility properties --------------------
 

@@ -19,6 +19,7 @@ from .engine import (
     SimResult,
     SimulatorExecutor,
     TriageKernel,
+    compute_output_length_ranks,
     simulate,
 )
 from .hardware import (
@@ -56,5 +57,6 @@ __all__ = [
     "TERMINAL_STATES",
     "Transition",
     "TriageKernel",
+    "compute_output_length_ranks",
     "simulate",
 ]

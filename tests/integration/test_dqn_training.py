@@ -5,10 +5,11 @@ import json
 
 import pytest
 
-gymnasium = pytest.importorskip("gymnasium")
 np = pytest.importorskip("numpy")
-
-from gymnasium.utils.env_checker import check_env
+try:
+    from gymnasium.utils.env_checker import check_env
+except ImportError:
+    check_env = None
 
 from experiments.train_dqn import policy_options, run
 from llm_triage.rl import RLPolicyCallback, TriageEnv
@@ -29,7 +30,8 @@ def make_env(requests, hardware=None, max_defers=5):
 def test_gymnasium_and_observation_hides_current_and_future_truth():
     env = make_env([Request("a", 0, 16, 1, 2), Request("b", 1, 16, 1, 3)])
     changed = make_env([Request("a", 0, 16, 200, 2), Request("b", 1, 8192, 500, 3)])
-    check_env(env, skip_render_check=True)
+    if check_env is not None:
+        check_env(env, skip_render_check=True)
     first, info = env.reset(seed=3)
     second, other = changed.reset(seed=3)
     np.testing.assert_array_equal(first, second)

@@ -22,8 +22,11 @@ Python command with `.\.venv\Scripts\python.exe`.
 ```bash
 python -m pip install -e ".[dev,rl]"
 python -m experiments.run_pipeline --config configs/pipeline_smoke.json --output results/runs/quick-check
-python -m experiments.run_pipeline --output results/runs/full
+python -m experiments.run_pipeline --cpu-test --include-ranked --output results/runs/cpu-smoke
+python -m experiments.run_pipeline --include-ranked --output results/runs/full
 ```
+
+Pass `--cpu-test` for a fast local CPU smoke test (1 seed, 2 episodes, 4 train windows, 2 validation windows) and `--include-ranked` to also train and evaluate the output-length-ranked RL policy (`dqn_ranked_seed*`) and write `comparison.csv` comparing FCFS, BurstGPT length-aware, the baseline RL policy, and the ranked RL policy. You can also call `run_training_loop(cpu_test_mode=..., include_ranked=True)` from [`notebooks/colab_training.ipynb`](../notebooks/colab_training.ipynb).
 
 The quick check trains one seed for two episodes. The full run trains seeds
 7, 17, and 27 for 24 episodes each with the current reward model. Both commands

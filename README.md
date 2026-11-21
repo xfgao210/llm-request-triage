@@ -39,6 +39,23 @@ python -m pip install -e ".[dev,rl]"
 python -m experiments.run_pipeline
 ```
 
+To train both the baseline RL policy and the output-length-ranked RL policy
+(`--include-ranked`) or run a fast local CPU smoke test (`--cpu-test`):
+
+```bash
+python -m experiments.run_pipeline --cpu-test --include-ranked --output results/runs/cpu-smoke
+python -m experiments.run_pipeline --include-ranked --output results/runs/full-comparison
+```
+
+From a Jupyter notebook or Google Colab (see [`notebooks/colab_training.ipynb`](notebooks/colab_training.ipynb)),
+call `run_training_loop` directly without duplicating code:
+
+```python
+from experiments.run_pipeline import run_training_loop
+
+results = run_training_loop(cpu_test_mode=True, include_ranked=True)
+```
+
 The pipeline prepares BurstGPT, trains three DQN seeds, reloads the checkpoints,
 and compares them with the rules on validation. See the
 [team run guide](docs/run_pipeline.md) for the quick check, custom training

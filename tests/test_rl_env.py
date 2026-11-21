@@ -23,6 +23,7 @@ from llm_triage.rl import (
     FULL_FEATURE_NAMES,
     ObservationBuilder,
     ObservationConfig,
+    RANKED_FEATURE_NAMES,
     RLPolicyCallback,
     RewardConfig,
     TriageEnv,
@@ -44,6 +45,7 @@ from llm_triage.simulation import (
     SimState,
     SimulatorExecutor,
     Transition,
+    compute_output_length_ranks,
     simulate,
 )
 
@@ -598,6 +600,55 @@ class TestRewardsAndEpisodeLifecycle(unittest.TestCase):
             syn_results["rl_direct"].summary["completed"],
             syn_results["rl_composite"].summary["completed"],
         )
+
+    def test_output_length_ranking_feature_and_queue_order(self) -> None:
+        # Three concurrent arrivals with identical prompt lengths (64) but different output lengths:
+        # r_long (out=400), r_mid (out=50), r_short (out=5).
+        reqs = [
+            make_req("r_long", arrival=0.0, inp=64, out=400, slo=2.0),
+            make_req("r_mid", arrival=0.0, inp=64, out=50, slo=2.0),
+            make_req("r_short", arrival=0.0, inp=64, out=5, slo=2.0),
+        ]
+        ranks = compute_output_length_ranks(reqs)
+        self.assertAlmostEqual(ranks["r_short"], 0.0)
+        self.assertAlmostEqual(ranks["r_mid"], 0.5)
+        self.assertAlmostEqual(ranks["r_long"], 1.0)
+
+        env = TriageEnv(
+            reqs,
+            hardware=HW,
+            profile=PROFILE,
+            rank_by_output_length=True,
+        )
+        obs, info = env.reset()
+        self.assertEqual(len(_as_list(obs)), len(RANKED_FEATURE_NAMES))
+        self.assertEqual(len(_as_list(obs)), 16)
+        self.assertTrue(env.observation_space.contains(obs))
+
+        # Shortest-output request is selected first, with rank 0.0 as the 16th feature
+        cand = env.observation()
+        assert cand is not None
+        self.assertEqual(cand.request_id, "r_short")
+        self.assertAlmostEqual(cand.output_length_rank, 0.0)
+        self.assertAlmostEqual(_as_list(obs)[-1], 0.0)
+
+        # Admit r_short -> next candidate in same pass should be r_mid (rank 0.5)
+        obs2, _, done, _, _ = env.step(Action.ADMIT)
+        self.assertFalse(done)
+        cand2 = env.observation()
+        assert cand2 is not None
+        self.assertEqual(cand2.request_id, "r_mid")
+        self.assertAlmostEqual(cand2.output_length_rank, 0.5)
+        self.assertAlmostEqual(_as_list(obs2)[-1], 0.5)
+
+        # Admit r_mid -> next candidate should be r_long (rank 1.0)
+        obs3, _, done, _, _ = env.step(Action.ADMIT)
+        self.assertFalse(done)
+        cand3 = env.observation()
+        assert cand3 is not None
+        self.assertEqual(cand3.request_id, "r_long")
+        self.assertAlmostEqual(cand3.output_length_rank, 1.0)
+        self.assertAlmostEqual(_as_list(obs3)[-1], 1.0)
 
 
 if __name__ == "__main__":

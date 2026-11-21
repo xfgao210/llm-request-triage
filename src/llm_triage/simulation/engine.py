@@ -33,6 +33,7 @@ Execution model (one GPU iteration at a time, vLLM-style):
 
 from __future__ import annotations
 
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 import time
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
@@ -149,6 +150,30 @@ class SimResult:
 # Steppable TriageKernel (TECH_DESIGN.md §6.4 / §7.4)
 # ---------------------------------------------------------------------------
 
+def compute_output_length_ranks(
+    requests: Sequence[Request],
+) -> Dict[Union[int, str], float]:
+    """Compute normalized mid-ranks in ``[0.0, 1.0]`` by ``output_tokens``.
+
+    ``0.0`` corresponds to the shortest output length in *requests* and ``1.0``
+    to the longest; ties receive their average rank, and a single-request cohort
+    maps to ``0.5``. Only ordinal ranking is returned (never raw token counts).
+    """
+    n = len(requests)
+    if n == 0:
+        return {}
+    if n == 1:
+        return {requests[0].request_id: 0.5}
+    sorted_lengths = sorted(r.output_tokens for r in requests)
+    ranks: Dict[Union[int, str], float] = {}
+    for r in requests:
+        lo = bisect_left(sorted_lengths, r.output_tokens)
+        hi = bisect_right(sorted_lengths, r.output_tokens)
+        mid_rank = lo + 0.5 * (hi - lo - 1)
+        ranks[r.request_id] = float(mid_rank / (n - 1))
+    return ranks
+
+
 class TriageKernel:
     """Authoritative, steppable request-state machine.
 
@@ -181,6 +206,7 @@ class TriageKernel:
         estimated_output_tokens: Optional[float] = None,
         service_estimator: Optional[Callable[[ int, float], float]] = None,
         priority_fn: Optional[Callable[[RequestView], object]] = None,
+        rank_by_output_length: bool = False,
         record_iterations: bool = True,
     ) -> None:
         self.hw = hardware or HardwareConfig()
@@ -201,10 +227,12 @@ class TriageKernel:
         )
         self._service_estimator = service_estimator
         self._priority_fn = priority_fn
+        self.rank_by_output_length = bool(rank_by_output_length)
         self.record_iterations = bool(record_iterations)
 
         # Initialized in reset()
         self.requests: List[Request] = []
+        self._output_length_ranks: Dict[Union[int, str], float] = {}
         self.kv = KVCacheManager(self.hw)
         self.now: float = 0.0
         self._pending: List[Request] = []
@@ -242,6 +270,11 @@ class TriageKernel:
             raise ValueError("request_ids must be unique after string normalization")
 
         self.requests = copied
+        self._output_length_ranks = (
+            compute_output_length_ranks(self.requests)
+            if self.rank_by_output_length
+            else {}
+        )
         self.kv = KVCacheManager(self.hw)
         self.now = 0.0
         # Sort by arrival time, preserving input order for ties
@@ -492,6 +525,11 @@ class TriageKernel:
         return self.profile.estimate_service_time(input_tokens, self.estimated_output_tokens)
 
     def _view(self, req: Request) -> RequestView:
+        output_rank = (
+            self._output_length_ranks.get(req.request_id, 0.5)
+            if self.rank_by_output_length
+            else 0.5
+        )
         return RequestView(
             request_id=req.request_id,
             arrival_time=req.arrival_time,
@@ -505,13 +543,23 @@ class TriageKernel:
             preemption_count=req.preemption_count,
             estimated_output_tokens=self.estimated_output_tokens,
             estimated_service_s=self._estimate_service_s(req.input_tokens),
+            output_length_rank=output_rank,
         )
 
     def _pick_candidate(self, eligible: Sequence[Request]) -> Request:
-        if self._priority_fn is None:
-            return eligible[0]
-        prio = self._priority_fn
-        return min(eligible, key=lambda r: prio(self._view(r)))
+        if self._priority_fn is not None:
+            prio = self._priority_fn
+            return min(eligible, key=lambda r: prio(self._view(r)))
+        if self.rank_by_output_length:
+            return min(
+                eligible,
+                key=lambda r: (
+                    self._output_length_ranks.get(r.request_id, 0.5),
+                    r.arrival_time,
+                    str(r.request_id),
+                ),
+            )
+        return eligible[0]
 
     def _record(self, start: float, kind: str, batch: int, tokens: int, qlen: int) -> None:
         if self.record_iterations:
@@ -771,6 +819,7 @@ class SimulatorExecutor:
         expire_overdue_in_queue: bool = False,
         estimated_output_tokens: Optional[float] = None,
         service_estimator: Optional[Callable[[int, float], float]] = None,
+        rank_by_output_length: bool = False,
     ) -> None:
         self.requests = tuple(Request.from_any(r) for r in requests)
         self.hardware = hardware or HardwareConfig()
@@ -780,6 +829,7 @@ class SimulatorExecutor:
         self.expire_overdue_in_queue = expire_overdue_in_queue
         self.estimated_output_tokens = estimated_output_tokens
         self.service_estimator = service_estimator
+        self.rank_by_output_length = bool(rank_by_output_length)
         self.results: Dict[str, SimResult] = {}
 
     def run(
@@ -787,6 +837,9 @@ class SimulatorExecutor:
         policy_name: str,
         scheduler: SchedulerCallback,
     ) -> Iterable[LifecycleEvent]:
+        rank_flag = bool(
+            getattr(scheduler, "rank_by_output_length", self.rank_by_output_length)
+        )
         res = simulate(
             self.requests,
             scheduler,
@@ -797,6 +850,7 @@ class SimulatorExecutor:
             expire_overdue_in_queue=self.expire_overdue_in_queue,
             estimated_output_tokens=self.estimated_output_tokens,
             service_estimator=self.service_estimator,
+            rank_by_output_length=rank_flag,
             record_iterations=False,
         )
         self.results[policy_name] = res
@@ -818,6 +872,7 @@ def simulate(
     expire_overdue_in_queue: bool = False,
     estimated_output_tokens: Optional[float] = None,
     service_estimator: Optional[Callable[[int, float], float]] = None,
+    rank_by_output_length: bool = False,
     record_iterations: bool = True,
 ) -> SimResult:
     """Run one simulation episode to completion.
@@ -855,6 +910,9 @@ def simulate(
         Keep a per-iteration trace in ``SimResult.iterations``.
     """
     priority_fn = getattr(callback, "priority", None)
+    effective_rank = bool(
+        rank_by_output_length or getattr(callback, "rank_by_output_length", False)
+    )
     kernel = TriageKernel(
         hardware=hardware,
         profile=profile,
@@ -864,6 +922,7 @@ def simulate(
         estimated_output_tokens=estimated_output_tokens,
         service_estimator=service_estimator,
         priority_fn=priority_fn,
+        rank_by_output_length=effective_rank,
         record_iterations=record_iterations,
     )
     kernel.reset(workload)

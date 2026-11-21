@@ -23,7 +23,7 @@ except ImportError:  # pragma: no cover - optional fallback for stdlib-only envi
     np = None  # type: ignore[assignment]
 
 
-ObservationPreset = Literal["full", "compact_7"]
+ObservationPreset = Literal["full", "full_ranked", "compact_7"]
 
 FULL_FEATURE_NAMES: Tuple[str, ...] = (
     "candidate_slack_ratio",
@@ -41,6 +41,11 @@ FULL_FEATURE_NAMES: Tuple[str, ...] = (
     "prefill_utilization",
     "decode_utilization",
     "episode_progress",
+)
+
+RANKED_FEATURE_NAMES: Tuple[str, ...] = (
+    *FULL_FEATURE_NAMES,
+    "candidate_output_length_rank",
 )
 
 COMPACT_7_FEATURE_NAMES: Tuple[str, ...] = (
@@ -133,6 +138,7 @@ def sanitize_request_view(view: RequestView) -> RequestView:
         preemption_count=int(getattr(view, "preemption_count", 0)),
         estimated_output_tokens=float(view.estimated_output_tokens),
         estimated_service_s=float(view.estimated_service_s),
+        output_length_rank=float(getattr(view, "output_length_rank", 0.5)),
     )
 
 
@@ -183,10 +189,13 @@ class ObservationConfig:
     horizon_clip_max: float = 5.0
     log_token_scale: float = 10.0
     log_queue_scale: float = 5.0
+    include_output_length_rank: bool = False
 
     def __post_init__(self) -> None:
-        if self.preset not in ("full", "compact_7"):
-            raise ValueError(f"preset must be 'full' or 'compact_7', got {self.preset!r}")
+        if self.preset not in ("full", "full_ranked", "compact_7"):
+            raise ValueError(
+                f"preset must be 'full', 'full_ranked', or 'compact_7', got {self.preset!r}"
+            )
         for name in (
             "horizon_s",
             "min_slo_s",
@@ -213,9 +222,12 @@ class ObservationBuilder:
 
     def __init__(self, config: ObservationConfig | None = None) -> None:
         self.config = config or ObservationConfig()
-        if self.config.preset == "full":
-            self._feature_names = FULL_FEATURE_NAMES
-            self._low = (
+        use_ranked = (
+            self.config.preset == "full_ranked"
+            or (self.config.preset == "full" and self.config.include_output_length_rank)
+        )
+        if self.config.preset in ("full", "full_ranked"):
+            base_low = (
                 self.config.slack_clip_min,  # candidate_slack_ratio
                 self.config.slack_clip_min,  # candidate_estimated_slack_ratio
                 0.0,                         # candidate_estimated_service_ratio
@@ -232,7 +244,7 @@ class ObservationBuilder:
                 0.0,                         # decode_utilization
                 0.0,                         # episode_progress
             )
-            self._high = (
+            base_high = (
                 self.config.slack_clip_max,    # candidate_slack_ratio
                 self.config.slack_clip_max,    # candidate_estimated_slack_ratio
                 self.config.service_clip_max,  # candidate_estimated_service_ratio
@@ -249,6 +261,14 @@ class ObservationBuilder:
                 1.0,                           # decode_utilization
                 self.config.horizon_clip_max,  # episode_progress
             )
+            if use_ranked:
+                self._feature_names = RANKED_FEATURE_NAMES
+                self._low = (*base_low, 0.0)
+                self._high = (*base_high, 1.0)
+            else:
+                self._feature_names = FULL_FEATURE_NAMES
+                self._low = base_low
+                self._high = base_high
         else:
             self._feature_names = COMPACT_7_FEATURE_NAMES
             self._low = (
@@ -414,25 +434,27 @@ class ObservationBuilder:
         prefill_util = _clip(float(getattr(res, "prefill_utilization", 0.0)) if res is not None else 0.0, 0.0, 1.0)
         decode_util = _clip(float(getattr(res, "decode_utilization", 0.0)) if res is not None else 0.0, 0.0, 1.0)
 
-        return _to_float_array(
-            (
-                slack_ratio,
-                est_slack_ratio,
-                est_service_ratio,
-                input_log,
-                wait_ratio,
-                defer_ratio,
-                fits,
-                queue_log,
-                q_min_slack,
-                q_mean_slack,
-                batch_util,
-                kv_util,
-                prefill_util,
-                decode_util,
-                progress,
-            )
+        base_features = (
+            slack_ratio,
+            est_slack_ratio,
+            est_service_ratio,
+            input_log,
+            wait_ratio,
+            defer_ratio,
+            fits,
+            queue_log,
+            q_min_slack,
+            q_mean_slack,
+            batch_util,
+            kv_util,
+            prefill_util,
+            decode_util,
+            progress,
         )
+        if self._feature_names == RANKED_FEATURE_NAMES:
+            output_rank = _clip(float(getattr(cand, "output_length_rank", 0.5)), 0.0, 1.0)
+            return _to_float_array((*base_features, output_rank))
+        return _to_float_array(base_features)
 
 
 __all__ = [
@@ -441,6 +463,7 @@ __all__ = [
     "ObservationBuilder",
     "ObservationConfig",
     "ObservationPreset",
+    "RANKED_FEATURE_NAMES",
     "assert_no_ground_truth_leakage",
     "assert_view_fields_only",
     "sanitize_request_view",

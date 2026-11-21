@@ -5,22 +5,32 @@ import json
 import numpy as np
 
 from .environment import ACTIONS
-from .observation import FULL_FEATURE_NAMES as FEATURES
+from .observation import FULL_FEATURE_NAMES as FEATURES, RANKED_FEATURE_NAMES
+
+
+VALID_FEATURE_SCHEMAS = (
+    tuple(FEATURES),
+    tuple(RANKED_FEATURE_NAMES),
+)
 
 
 class DQN:
-    def __init__(self, seed=0, hidden=32, learning_rate=0.001, gamma=0.99):
+    def __init__(self, seed=0, hidden=32, learning_rate=0.001, gamma=0.99, features=FEATURES):
         if isinstance(hidden, bool) or not isinstance(hidden, int) or hidden < 1:
             raise ValueError("hidden must be a positive integer")
         if not np.isfinite(learning_rate) or learning_rate <= 0:
             raise ValueError("learning_rate must be finite and positive")
         if not np.isfinite(gamma) or not 0 <= gamma <= 1:
             raise ValueError("gamma must lie in [0, 1]")
+        self.features = tuple(features)
+        if not self.features:
+            raise ValueError("features must be non-empty")
+        n_features = len(self.features)
         self.rng = np.random.default_rng(seed)
         self.learning_rate = learning_rate
         self.gamma = gamma
         self.params = {
-            "w1": self.rng.normal(0, np.sqrt(2 / len(FEATURES)), (len(FEATURES), hidden)),
+            "w1": self.rng.normal(0, np.sqrt(2 / n_features), (n_features, hidden)),
             "b1": np.zeros(hidden),
             "w2": self.rng.normal(0, np.sqrt(1 / hidden), (hidden, len(ACTIONS))),
             "b2": np.zeros(len(ACTIONS)),
@@ -91,9 +101,13 @@ class DQN:
     def load(cls, path):
         with np.load(path, allow_pickle=False) as data:
             metadata = json.loads(data["metadata"].item())
-            if metadata["features"] != list(FEATURES) or metadata["actions"] != [a.value for a in ACTIONS]:
+            saved_features = tuple(metadata.get("features", ()))
+            if (
+                saved_features not in VALID_FEATURE_SCHEMAS
+                or metadata["actions"] != [a.value for a in ACTIONS]
+            ):
                 raise ValueError("Checkpoint observation or action schema does not match")
-            model = cls(hidden=data["b1"].size)
+            model = cls(hidden=data["b1"].size, features=saved_features)
             for key, expected in model.params.items():
                 value = data[key]
                 if value.shape != expected.shape or not np.isfinite(value).all():
@@ -104,11 +118,11 @@ class DQN:
 
 
 class ReplayBuffer:
-    def __init__(self, capacity, seed):
+    def __init__(self, capacity, seed, state_dim=len(FEATURES)):
         self.capacity = capacity
         self.cursor = self.size = 0
         self.rng = np.random.default_rng(seed)
-        self.states = np.zeros((capacity, len(FEATURES)), dtype=np.float32)
+        self.states = np.zeros((capacity, state_dim), dtype=np.float32)
         self.next_states = np.zeros_like(self.states)
         self.actions = np.zeros(capacity, dtype=np.int64)
         self.rewards = np.zeros(capacity)

@@ -26,8 +26,9 @@ env = TriageEnv(
     hardware=RTX_5070_QWEN05B,
     profile=ServiceProfile(),
     horizon_s=120.0,
-    candidate_selector="fcfs",       # "fcfs" | "length_aware" | "slo_aware" | "earliest_deadline" | callable
-    observation_preset="full",       # "full" (15 features) | "compact_7" (7 features)
+    candidate_selector="fcfs",       # "fcfs" | "length_aware" | "output_length_rank" | "slo_aware" | "earliest_deadline" | callable
+    observation_preset="full",       # "full" (15 features) | "full_ranked" (16 features) | "compact_7" (7 features)
+    rank_by_output_length=False,     # True enables output-length ranking (16 features + queue ranking)
     invalid_action_mode="raise",     # "raise" | "fallback" | "penalize"
 )
 
@@ -42,7 +43,7 @@ while not env.done:
 
 | Module | Contents |
 |---|---|
-| `src/llm_triage/rl/observation.py` | `ObservationConfig`, `ObservationBuilder`, `FULL_FEATURE_NAMES` (15 features), `COMPACT_7_FEATURE_NAMES` (7 features), and ground-truth/future-arrival leakage guards (`assert_no_ground_truth_leakage`, `sanitize_request_view`, `sanitize_snapshot`) |
+| `src/llm_triage/rl/observation.py` | `ObservationConfig`, `ObservationBuilder`, `FULL_FEATURE_NAMES` (15 features), `RANKED_FEATURE_NAMES` (16 features with `candidate_output_length_rank`), `COMPACT_7_FEATURE_NAMES` (7 features), and ground-truth/future-arrival leakage guards (`assert_no_ground_truth_leakage`, `sanitize_request_view`, `sanitize_snapshot`) |
 | `src/llm_triage/rl/masking.py` | `ACTIONS` (`ADMIT=0`, `DEFER=1`, `DROP=2`), `ActionMaskConfig`, `compute_action_mask()`, and `resolve_action()` with configurable `invalid_action_mode` (`"raise"`, `"fallback"`, `"penalize"`) |
 | `src/llm_triage/rl/rewards.py` | `RewardModel` protocol (`reward(transition) -> float`), `RewardConfig`, and `AsymmetricRewardModel` |
 | `src/llm_triage/rl/environment.py` | `TriageEnv` (`gymnasium.Env` wrapper around `TriageKernel`), `RLPolicyCallback` (`SchedulerCallback` adapter for `simulate()` and `SimulatorExecutor`), and `run_policy()` |

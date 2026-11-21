@@ -174,6 +174,7 @@ VALID_SELECTOR_NAMES: Tuple[str, ...] = (
     "fcfs",
     "length_aware",
     "shortest_estimated",
+    "output_length_rank",
     "slo_aware",
     "lowest_slack",
     "earliest_deadline",
@@ -252,6 +253,8 @@ def resolve_priority_fn(
         return None
     if name in ("length_aware", "shortest_estimated"):
         return lambda v: (v.estimated_service_s, v.arrival_time_s, str(v.request_id))
+    if name == "output_length_rank":
+        return lambda v: (v.output_length_rank, v.arrival_time_s, str(v.request_id))
     if name in ("slo_aware", "lowest_slack"):
         return lambda v: (v.estimated_slack_s(), v.arrival_time_s, str(v.request_id))
     # earliest_deadline
@@ -347,6 +350,7 @@ class TriageEnv(_GymEnvBase):
         service_estimator: Optional[Callable[[int, float], float]] = None,
         candidate_selector: Optional[CandidateSelectorSpec] = None,
         queue_order: Optional[CandidateSelectorSpec] = None,
+        rank_by_output_length: bool = False,
         observation_preset: ObservationPreset = "full",
         observation_config: Optional[ObservationConfig] = None,
         observation_builder: Optional[ObservationBuilder] = None,
@@ -381,11 +385,13 @@ class TriageEnv(_GymEnvBase):
                 f"got {invalid_action_mode!r}"
             )
         self.invalid_action_mode: InvalidActionMode = invalid_action_mode
+        self.rank_by_output_length = bool(rank_by_output_length)
 
+        default_selector = "output_length_rank" if self.rank_by_output_length else "fcfs"
         selector_spec: CandidateSelectorSpec = (
             candidate_selector
             if candidate_selector is not None
-            else (queue_order if queue_order is not None else "fcfs")
+            else (queue_order if queue_order is not None else default_selector)
         )
         self.candidate_selector = selector_spec
         self._priority_fn = resolve_priority_fn(selector_spec)
@@ -406,6 +412,7 @@ class TriageEnv(_GymEnvBase):
             estimated_output_tokens=self.estimated_output_tokens,
             service_estimator=self.service_estimator,
             priority_fn=self._priority_fn,
+            rank_by_output_length=self.rank_by_output_length,
             record_iterations=True,
         )
 
@@ -423,10 +430,16 @@ class TriageEnv(_GymEnvBase):
         if observation_builder is not None:
             self.observation_builder = observation_builder
         else:
+            effective_preset: ObservationPreset = (
+                "full_ranked"
+                if self.rank_by_output_length and observation_preset == "full"
+                else observation_preset
+            )
             obs_cfg = observation_config or ObservationConfig(
-                preset=observation_preset,
+                preset=effective_preset,
                 horizon_s=self.horizon_s,
                 max_defers=self.max_defers or 64,
+                include_output_length_rank=self.rank_by_output_length,
             )
             self.observation_builder = ObservationBuilder(obs_cfg)
 
@@ -767,18 +780,35 @@ class RLPolicyCallback:
         observation_config: Optional[ObservationConfig] = None,
         mask_config: Optional[ActionMaskConfig] = None,
         candidate_selector: CandidateSelectorSpec = "fcfs",
+        rank_by_output_length: bool = False,
         invalid_action_mode: InvalidActionMode = "fallback",
         deterministic: bool = True,
     ) -> None:
         self.policy = policy
-        self.observation_builder = observation_builder or ObservationBuilder(observation_config)
+        self.rank_by_output_length = bool(rank_by_output_length)
+        if observation_builder is not None:
+            self.observation_builder = observation_builder
+        elif observation_config is not None:
+            self.observation_builder = ObservationBuilder(observation_config)
+        else:
+            self.observation_builder = ObservationBuilder(
+                ObservationConfig(
+                    preset="full_ranked" if self.rank_by_output_length else "full",
+                    include_output_length_rank=self.rank_by_output_length,
+                )
+            )
         self.mask_config = mask_config or ActionMaskConfig()
+        effective_selector = (
+            "output_length_rank"
+            if self.rank_by_output_length and candidate_selector == "fcfs"
+            else candidate_selector
+        )
         self._selector_obj = (
-            candidate_selector
-            if hasattr(candidate_selector, "select") and callable(getattr(candidate_selector, "select"))
+            effective_selector
+            if hasattr(effective_selector, "select") and callable(getattr(effective_selector, "select"))
             else None
         )
-        self._priority_fn = resolve_priority_fn(candidate_selector)
+        self._priority_fn = resolve_priority_fn(effective_selector)
         self.invalid_action_mode: InvalidActionMode = invalid_action_mode
         self.deterministic = bool(deterministic)
 
