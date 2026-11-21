@@ -1,0 +1,111 @@
+{
+  "arrival_multipliers": [
+    1.0,
+    8.0
+  ],
+  "code_sha256": {
+    "experiments/adaptation_stress.py": "8ba3f06ad486c41df0bb01f780bf152f533a2076c7988c805d95865aa1a5a871",
+    "experiments/baseline_capacity_sweep.py": "e85fb8a448445d0ce74c74b5cb156bfeaedc6e0136accecd5278ad3e2aafe8af",
+    "experiments/confirm_scheduling.py": "ace2f0e116ab6919bd772aa6ac764b20ced08fd9a1f9bda2f9f7b859fb81688e",
+    "experiments/evaluate_traffic_multiplier.py": "baf5c6629fb369024859186ce0b975829d38ec5ab3c3f4ae45bb2b54bb556415",
+    "experiments/kv_pressure_study.py": "c0f9b1d268cb32d23fce1dd1cae00baddbca52ea576d687668a0c6e0203aa2cb",
+    "experiments/pressure_policy_selector.py": "d04001a729a846d7cfaa4373e6127ca68f4f89115fbe0d117927d000dd9e79be",
+    "experiments/scheduling_study.py": "b5c352e8372041bf23abee523a85bae0c9cd2f094ee500d7c3cf317abe84a8db",
+    "experiments/train_dqn.py": "411308857d30208d0c7f19c11148d23fd43e029907baaca7c167fa35086d9161",
+    "experiments/train_policy_selector.py": "e6329608914299fc9b063fae38ada4609c7302dfc29b06c16ecc27e4ee3ea3ca",
+    "src/llm_triage/__init__.py": "ca85e1fb437b740f695963a8b5f27e1dfddca04a75e9717d0266d032058736dd",
+    "src/llm_triage/evaluation/__init__.py": "7125e35dc1c0c202653e7904944224c70d2eb1da833cf77002d0e0c9d7c86f9c",
+    "src/llm_triage/evaluation/reporting.py": "61c3cab3b9002f80aa03657d2689e64ecf3dbf28f0d211eeb29433a46eb394f3",
+    "src/llm_triage/evaluation/runner.py": "f0210a9f9822d2abe30198b2639b3c00be0a77da04eb4d8cc6901e0be569e5f0",
+    "src/llm_triage/metrics/__init__.py": "06f105040442343edff152cadbe6e85d9f21a72db8f595e7c01084d8783d0a09",
+    "src/llm_triage/metrics/collector.py": "39ba27f272d4469daf5390e64e77e7860211bcace075f03ed056051bbe82159f",
+    "src/llm_triage/metrics/schemas.py": "8d7af7f69158e5e93f2737fa858ce390cd480554210aaf830d4070c155aac5f5",
+    "src/llm_triage/metrics/summary.py": "88e4e61e2889bb1db5afe8b0a708b6507e49bdbab0361bf42a72a76944268d48",
+    "src/llm_triage/rl/__init__.py": "a63fdc7ac4ddd0e4bfc1faaeb22a6decc40415c554998d38f88b7f32adde5fda",
+    "src/llm_triage/rl/devices.py": "7a3152727205970bd342ad57cc8ae2f520235954db3077d784e46fb718994cd4",
+    "src/llm_triage/rl/dqn.py": "142791ea92a801a17bb46236e0f65f571736eef164d495bed89d6150bffac120",
+    "src/llm_triage/rl/environment.py": "7fd4ff5a9ebbf0f26df360815787f114de503d6d5b39c6db525c98f6bea3196f",
+    "src/llm_triage/rl/masking.py": "bea547f29c1693eb1c3b8e55f7f08c76438ee083bbb3b2d32d9de98f6fe8c6a7",
+    "src/llm_triage/rl/observation.py": "448cc3858a2e712824a4e2f4c04c03e2e7c7c1ed9907c721f8e551129fc8dd9c",
+    "src/llm_triage/rl/rewards.py": "6411644799cac2e9962a950c211238dc8c562cd2fa54a24406582543b7856579",
+    "src/llm_triage/rl/update_schedule.py": "0f1a3c9c063e152223988ca6292ed8bda3650fd6f43aa2de9baead5ca72d3668",
+    "src/llm_triage/scheduling/__init__.py": "4e288b5e5ac1b254b9f451d82c513409e78ac40df1e41a849689bced9629cace",
+    "src/llm_triage/scheduling/baselines.py": "90449418584ddedc69a177cbcd02830cc9811873a05f7cd6d8da15e785d30ebc",
+    "src/llm_triage/scheduling/burst_switch.py": "0ccf095e6176558b2302803a34a5c56be49578c9790724b5adbb6775b0e64be7",
+    "src/llm_triage/scheduling/fcfs.py": "8ec5d673fc0a11cf7076bb798c95ff5b005429999ad6ef761f574c669202954a",
+    "src/llm_triage/scheduling/length_aware.py": "3456ef7c00d698d06b449612bd787e5f8a631079a26124a5293f024f5d74778a",
+    "src/llm_triage/scheduling/policy_selector.py": "ef162fa9368844817453205c0ee3f49f838afc39abf8dcb95f83b84908bed52d",
+    "src/llm_triage/scheduling/slo_aware.py": "041ec21e00a045f5d988701bf718a5a34071466b52e0e71c96e89ba068760edd",
+    "src/llm_triage/simulation/__init__.py": "a81e733b1c7e08e8f0c51ee2ba29bcde7bc26e510fcf14964371d8f8e1e47373",
+    "src/llm_triage/simulation/baselines.py": "2285673c1e68db008b7af075301f9442e9a4eb7bde2953c15568de1e310d3bb9",
+    "src/llm_triage/simulation/callback.py": "283e8bac8f8f2464cdfaa9408c8f070e097125c4d9d85a5da000977e7e510587",
+    "src/llm_triage/simulation/engine.py": "43c8d53ff3b477d07532856146b679af2cef5019d817fafbf160294df7ab2355",
+    "src/llm_triage/simulation/hardware.py": "7ce54cc394705a29f5c2312e9583a30edb3def1b031560801abcd797d2d4ea80",
+    "src/llm_triage/simulation/profile.py": "ec3839ff9370c70fcac2f10bfe82355479cb86dcf1f4f2bc96bd421eb5e866e7",
+    "src/llm_triage/simulation/request.py": "e3697a5770ade04d17b77f37e0938f1ed8708a033c8290a4bf64275bfe3cd51e",
+    "src/llm_triage/workload/__init__.py": "e657c30842cd11d1726e621f88402b51b89a5cf3a9bbabb0889f82f65a64945c",
+    "src/llm_triage/workload/burstgpt.py": "2ce9270019e6fafe86760097db743dcf7159ff77d5359648241eff722a0796b7",
+    "src/llm_triage/workload/synthetic.py": "bdedc32b36f011cb793401ebfbd4b84f5aae6eceac6ace5157007693299ce7be",
+    "src/llm_triage/workload/time_ranges.py": "2460f8746e655685f453d0a52c52325bd6d7c3783de0b0ad11e000510b97872a",
+    "src/llm_triage/workload/transforms.py": "5943bbb639cf6326ac21bebee80177fe9773f6dcf2eb449036b43bb57c0e29df"
+  },
+  "config": {
+    "agent": {
+      "discount_mode": "elapsed_time",
+      "gamma": 0.99,
+      "hidden": 32,
+      "learning_rate": 0.001
+    },
+    "candidate_selector": "length_aware",
+    "decisions": {
+      "defer_retry_s": 0.25,
+      "max_defers": 5
+    },
+    "episodes": 24,
+    "hardware": {
+      "gpu_name": "RTX-5070-12GB/Qwen2.5-0.5B",
+      "kv_block_size": 16,
+      "kv_total_blocks": 48059,
+      "max_batch_size": 32
+    },
+    "observation": {
+      "include_episode_progress": false
+    },
+    "reward": {},
+    "seeds": [
+      7,
+      17,
+      27
+    ],
+    "slo_s": 5.0,
+    "target_rps": [
+      2.4,
+      4.8,
+      9.6
+    ],
+    "validate_every": 8
+  },
+  "evaluation_split": "previously_used_test_peak_heavy",
+  "frozen_inputs_sha256": {
+    "results\\policy-selector-pressure\\standard\\run.json": "81e5d98a6ff55729e5d18f77d1af645a57b90ac7506e49093004ba3ec1923574",
+    "results\\policy-selector-pressure\\standard\\seed7\\selector.json": "eb4d3fa83e6b362bddfed05b1a4e4daf3d9c1d062362a7a98b4966974916f0cb",
+    "results\\runs\\kv-pressure-standard\\frozen_selection.json": "0b253d720c9d11bbce4465a603a9231c36fc07004184501a4a9840b28fbd8457",
+    "results\\runs\\kv-pressure-standard\\training\\dqn_seed7.npz": "389691509804d224befc0719b92913bbbedc91f316c4eda376a20de0b5bae68a",
+    "results\\runs\\kv-pressure-standard\\training\\run.json": "6ac011dcf7ec39f690411f055b73d615469bc3ee062b1f18429724138d703841"
+  },
+  "load_semantics": "multiplier of original native traffic",
+  "models_retrained": false,
+  "reference_rule": "length_aware",
+  "rule_selection": "original 9.6-RPS cutoff held fixed; not selected at 8x",
+  "scope": "peak",
+  "selector_dir": "results\\policy-selector-pressure\\standard",
+  "selectors_refitted": false,
+  "source_sha256": {
+    "manifest_sha256": "796bd434a2910bfd994aec30502f9b9e2c9f0c4f216974f4d9bef2cafb11f494",
+    "source_sha256": "2299986a07388aa303ec2c41d1131e756db650a39ed6ef9dfe7cc3d7f9a43b8f",
+    "trace_sha256": "e2f16bde14cf271705d989b6bf0774defffb4f3a3b1cdd4132487be4028e9b7f"
+  },
+  "study_dir": "results\\runs\\kv-pressure-standard",
+  "test_evaluated": true,
+  "total_policy_runs": 10
+}

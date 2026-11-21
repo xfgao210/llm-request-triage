@@ -181,6 +181,7 @@ class TriageKernel:
         estimated_output_tokens: Optional[float] = None,
         service_estimator: Optional[Callable[[ int, float], float]] = None,
         priority_fn: Optional[Callable[[RequestView], object]] = None,
+        arrival_observer: Optional[Callable[[float], None]] = None,
         record_iterations: bool = True,
         skip_blocked_admits: bool = False,
         drop_blocked_candidate: Optional[Callable[[RequestView], bool]] = None,
@@ -203,6 +204,7 @@ class TriageKernel:
         )
         self._service_estimator = service_estimator
         self._priority_fn = priority_fn
+        self._arrival_observer = arrival_observer
         self.record_iterations = bool(record_iterations)
         self._skip_blocked_admits = skip_blocked_admits
         self._drop_blocked_candidate = drop_blocked_candidate
@@ -279,6 +281,32 @@ class TriageKernel:
     def is_terminal(self) -> bool:
         """``True`` when all requests have reached a terminal state."""
         return self._episode_ended
+
+    def fork(self, *, priority_fn=None, arrival_observer=None, arrivals_before_s=None):
+        """Copy a decision state for privileged offline counterfactual replay.
+
+        Mutable requests, queues and KV allocations remain internally linked
+        in the copy and independent of the source. Policy hooks are detached
+        before copying and explicitly rebound. Optional arrival truncation is
+        half-open; already arrived/running work is always retained. This API
+        contains ground truth and must never be handed to an online policy.
+        """
+        from copy import copy, deepcopy
+
+        if arrivals_before_s is not None:
+            _check_finite(arrivals_before_s, "arrivals_before_s", strictly_positive=True)
+            if arrivals_before_s <= self.now:
+                raise ValueError("Arrival cutoff must follow the fork time")
+        shell = copy(self)
+        shell._priority_fn = None
+        shell._arrival_observer = None
+        branch = deepcopy(shell)
+        branch._priority_fn = priority_fn
+        branch._arrival_observer = arrival_observer
+        if arrivals_before_s is not None:
+            branch.requests = [r for r in branch.requests if r.arrival_time < arrivals_before_s]
+            branch._pending = [r for r in branch._pending if r.arrival_time < arrivals_before_s]
+        return branch
 
     def events(self) -> Tuple[LifecycleEvent, ...]:
         """Return all chronological lifecycle events emitted so far."""
@@ -443,6 +471,8 @@ class TriageKernel:
             req.state = RequestState.QUEUED
             self.queue.append(req)
             self._next += 1
+            if self._arrival_observer is not None:
+                self._arrival_observer(req.arrival_time)
             self._emit(
                 EventType.ARRIVAL,
                 req.request_id,
@@ -872,6 +902,9 @@ def simulate(
         would drop. Leave unset for policies that only admit.
     """
     priority_fn = getattr(callback, "priority", None)
+    reset_episode = getattr(callback, "reset_episode", None)
+    if reset_episode is not None:
+        reset_episode()
     kernel = TriageKernel(
         hardware=hardware,
         profile=profile,
@@ -881,6 +914,7 @@ def simulate(
         estimated_output_tokens=estimated_output_tokens,
         service_estimator=service_estimator,
         priority_fn=priority_fn,
+        arrival_observer=getattr(callback, "observe_arrival", None),
         record_iterations=record_iterations,
         skip_blocked_admits=skip_blocked_admits,
         drop_blocked_candidate=drop_blocked_candidate,

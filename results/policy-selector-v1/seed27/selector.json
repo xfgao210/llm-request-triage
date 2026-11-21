@@ -1,0 +1,61 @@
+{
+  "burst_config": {
+    "enter_ratio": 2.0,
+    "exit_ratio": 1.2,
+    "min_dwell_s": 2.0,
+    "min_recent_arrivals": 3,
+    "min_reference_rps": 1.0,
+    "recent_window_s": 1.0,
+    "reference_window_s": 10.0
+  },
+  "checkpoint_sha256": "6e7a60b5f9b8dce6dc4b723a1addaaf1e3fa8b2313993a41145b730097305847",
+  "enter_probability": 0.7,
+  "exit_probability": 0.4,
+  "features": [
+    "recent_rps",
+    "reference_rps",
+    "burst_ratio",
+    "eligible_queue_length",
+    "oldest_eligible_wait_s",
+    "candidate_slack_s",
+    "batch_utilization",
+    "kv_utilization"
+  ],
+  "root": {
+    "feature": 7,
+    "left": {
+      "feature": 4,
+      "left": {
+        "feature": 2,
+        "left": {
+          "probability": 0.08928571428571429,
+          "samples": 56
+        },
+        "right": {
+          "probability": 0.0,
+          "samples": 81
+        },
+        "threshold": 1.1564171314239502
+      },
+      "right": {
+        "feature": 6,
+        "left": {
+          "probability": 0.36363636363636365,
+          "samples": 22
+        },
+        "right": {
+          "probability": 0.0,
+          "samples": 13
+        },
+        "threshold": 0.5
+      },
+      "threshold": 0.29359346628189087
+    },
+    "right": {
+      "probability": 0.5833333333333334,
+      "samples": 12
+    },
+    "threshold": 0.08509332314133644
+  },
+  "schema_version": 1
+}
