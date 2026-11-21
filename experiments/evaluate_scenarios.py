@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 from statistics import fmean
 
-from experiments.train_dqn import evaluate, load_cohorts, write_csv, write_json
+from experiments.train_dqn import configured_candidate_order, evaluate, load_cohorts, write_csv, write_json
 from llm_triage.rl.dqn import DQN
 from llm_triage.simulation import HardwareConfig, ServiceProfile
 from llm_triage.workload.burstgpt import sha256
@@ -59,7 +59,7 @@ def run(training_dir, data_dir, output, *, split="validation", target_rps=None, 
     rows = evaluate(models, cohorts[split], HardwareConfig(**config["hardware"]),
                     ServiceProfile(**record["service_profile"]), estimate, config["decisions"], baselines=True,
                     observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config,
-                    candidate_selector=config.get("candidate_selector", "fcfs"),
+                    candidate_order=configured_candidate_order(config),
                     burst_switch_config=burst_switch_config)
     for row in rows:
         item = layout.get(row["window"], {})

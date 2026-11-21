@@ -16,8 +16,11 @@ def test_online_notebook_trains_before_adapting_without_archive_input():
     offline = cells("colab_burstgpt3_experiments.ipynb")
     online = cells("colab_burstgpt3_online_adaptation.ipynb")
     assert list(online).index("train") < list(online).index("run")
-    for name in ("source", "data", "learning-charts", "validation-charts"):
+    for name in ("source", "data", "validation-charts"):
         assert online[name] == offline[name]
+    assert "training_updates_seed" in online["learning-charts"]
+    assert "LOSS_SMOOTHING_UPDATES" in online["learning-charts"]
+    assert "validation_drop_rate" in online["learning-charts"]
     assert "TRAINING_ARCHIVE" not in "\n".join(online.values())
     assert "archive_path" not in online["export"]
     assert "EVAL_WINDOW_SECONDS = 900" in online["parameters"]

@@ -8,7 +8,7 @@ import platform
 
 import numpy as np
 
-from experiments.train_dqn import load_cohorts, policy_options, write_csv, write_json
+from experiments.train_dqn import configured_candidate_order, load_cohorts, policy_options, write_csv, write_json
 from llm_triage.metrics import evaluate_events
 from llm_triage.rl import RLPolicyCallback
 from llm_triage.rl.dqn import DQN
@@ -189,7 +189,7 @@ def run(training_dir, data_dir, output, *, train_windows=8, validation_windows=8
         seed_dir.mkdir()
         weights = model.copy_weights()
         labels = collect_training_rows(training, model, hardware, profile, estimate, config["decisions"],
-                                       config.get("observation"), config.get("candidate_selector", "fcfs"),
+                                       config.get("observation"), configured_candidate_order(config),
                                        switch_config, samples_per_case=samples_per_case, lookahead_s=lookahead_s)
         write_csv(seed_dir / "training_labels.csv", labels)
         tree = fit_selector(labels, max_depth=max_depth, min_samples_leaf=min_samples_leaf)
@@ -198,7 +198,7 @@ def run(training_dir, data_dir, output, *, train_windows=8, validation_windows=8
                    checkpoint_sha256=before[f"dqn_seed{seed}.npz"]))
         def custom_factory(replay):
             return RLPolicyCallback(model, **policy_options(
-                replay, config["decisions"], config.get("observation"), config.get("candidate_selector", "fcfs")))
+                replay, config["decisions"], config.get("observation"), configured_candidate_order(config)))
         rows = evaluate_selector(validation, custom_factory, tree, hardware, profile, estimate,
                                  config["decisions"], switch_config, enter_probability=enter_probability,
                                  exit_probability=exit_probability)

@@ -88,6 +88,8 @@ checkpoints, checks their hashes, and runs the paired test comparison. See
 
 ## Components
 
+- [Hengyi's experiments and review order](docs/hengyi-work.md).
+
 - [Small learned FCFS / DQN selector](docs/policy_selector.md): offline
   same-state rollouts, a shallow decision tree, and paired validation against
   fixed policies and burst-based switching.

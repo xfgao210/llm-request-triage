@@ -100,3 +100,24 @@ def test_evaluation_includes_fixed_and_switching_dqn_with_paired_cohorts():
     assert hybrid["custom_decisions"] > 0
     assert json.loads(hybrid["switch_trace_json"])[0]["mode"] == "custom"
     assert all((before[key] == model.params[key]).all() for key in before)
+
+
+@pytest.mark.parametrize("keyword", ["candidate_order", "candidate_selector"])
+@pytest.mark.parametrize("order, attainment", [("length_aware", 1.0), ("fcfs", .5)])
+def test_custom_mode_keeps_the_same_order_as_fixed_dqn_for_both_argument_names(keyword, order, attainment):
+    from experiments.train_dqn import evaluate
+    from llm_triage.workload.transforms import ReplayWindow
+
+    class Admit:
+        def act(self, observation, mask):
+            return 0
+
+    replay = ReplayWindow((Request("long", 1, 1000, 1, 6), Request("short", 1, 1, 1, 1.1)), 10, 0, 1)
+    config = BurstSwitchConfig(recent_window_s=.01, reference_window_s=.01,
+                               min_recent_arrivals=1, min_reference_rps=.01, min_dwell_s=0)
+    profile = ServiceProfile(prefill_overhead_s=.01, prefill_rate=1000, prefill_quadratic_s=0)
+    rows = evaluate({"dqn": Admit()}, [(0, None, replay)], HardwareConfig(max_batch_size=1), profile,
+                    1, dict(max_defers=5, defer_retry_s=.25), burst_switch_config=config, **{keyword: order})
+    assert all(row["slo_attainment"] == attainment for row in rows)
+    hybrid = next(row for row in rows if row["policy"] == "switch_dqn")
+    assert hybrid["custom_decisions"] > 0
