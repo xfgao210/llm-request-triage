@@ -125,13 +125,13 @@ class QueueSlackRule(SlackAdmission):
         return candidate.estimated_slack_s() < threshold
 
 
-class QueueSlackReplay(TriageKernel):
-    """Skip leading no-op actions while preserving the rule's visible queue length."""
+class ActionableReplay(TriageKernel):
+    """Skip leading no-op admissions while keeping their effect on the current pass."""
 
-    def __init__(self, rule, hardware, profile, estimate, decisions):
+    def __init__(self, policy, hardware, profile, estimate, decisions):
         super().__init__(hardware, profile, estimated_output_tokens=estimate,
-                         priority_fn=rule.priority, record_iterations=False, **decisions)
-        self.rule = rule
+                         priority_fn=policy.priority, record_iterations=False, **decisions)
+        self.policy = policy
 
     def _eligible_candidates(self):
         eligible = super()._eligible_candidates()
@@ -139,11 +139,11 @@ class QueueSlackReplay(TriageKernel):
         if all(request.input_tokens <= free_tokens for request in eligible):
             return eligible
         ranked = sorted(((self._view(request), request) for request in eligible),
-                        key=lambda pair: self.rule.priority(pair[0]))
+                        key=lambda pair: self.policy.priority(pair[0]))
         for index, (candidate, request) in enumerate(ranked):
             if (request.input_tokens <= free_tokens
-                    or self.rule.should_drop_at_queue_length(candidate, len(ranked) - index)):
-                return [request for _, request in ranked[index:]]
+                    or self.can_act_on_blocked(candidate, len(ranked) - index)):
+                return [item for item in eligible if item.request_id not in self._deferred_in_pass]
             # The original failed ADMIT would hide this request for this pass.
             self._deferred_in_pass.add(request.request_id)
         return []
@@ -151,8 +151,19 @@ class QueueSlackReplay(TriageKernel):
     def run(self, requests):
         self.reset(requests)
         while not self.is_terminal():
-            self.apply(self.rule.decide(self.snapshot()))
+            self.apply(self.choose_action(self.snapshot()))
         return self.result()
+
+    def choose_action(self, snapshot):
+        return self.policy.decide(snapshot)
+
+    def can_act_on_blocked(self, candidate, eligible_count):
+        raise NotImplementedError
+
+
+class QueueSlackReplay(ActionableReplay):
+    def can_act_on_blocked(self, candidate, eligible_count):
+        return self.policy.should_drop_at_queue_length(candidate, eligible_count)
 
 
 def phase_records(result, replay, phases):
