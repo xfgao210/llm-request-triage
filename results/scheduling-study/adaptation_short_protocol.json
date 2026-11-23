@@ -1,0 +1,9 @@
+{
+  "epsilon": 0.0,
+  "learning_rate": 1e-05,
+  "max_updates": 100,
+  "min_new_outcomes": 32,
+  "min_update_seconds": 1.0,
+  "update_interval": 32,
+  "warmup": 256
+}

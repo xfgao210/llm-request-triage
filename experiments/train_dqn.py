@@ -106,9 +106,23 @@ def arrival_settings(config):
     return values
 
 
-def policy_options(replay, decisions, observation=None, candidate_order="fcfs"):
-    if candidate_order not in ("fcfs", "length_aware"):
-        raise ValueError("rl_candidate_order must be fcfs or length_aware")
+def resolve_candidate_order(candidate_order=None, candidate_selector=None):
+    """Accept both experiment configuration names without changing saved metadata."""
+    if candidate_order is not None and candidate_selector is not None and candidate_order != candidate_selector:
+        raise ValueError("rl_candidate_order and candidate_selector must agree")
+    order = candidate_order if candidate_order is not None else candidate_selector
+    order = "fcfs" if order is None else order
+    if order not in ("fcfs", "length_aware"):
+        raise ValueError("rl_candidate_order / candidate_selector must be fcfs or length_aware")
+    return order
+
+
+def configured_candidate_order(config):
+    return resolve_candidate_order(config.get("rl_candidate_order"), config.get("candidate_selector"))
+
+
+def policy_options(replay, decisions, observation=None, candidate_order=None, *, candidate_selector=None):
+    candidate_order = resolve_candidate_order(candidate_order, candidate_selector)
     return dict(
         candidate_selector=candidate_order,
         observation_config=ObservationConfig(
@@ -124,7 +138,8 @@ def policy_options(replay, decisions, observation=None, candidate_order="fcfs"):
 
 
 def evaluate(models, cases, hardware, profile, estimate, decisions, *, baselines=False,
-             observation=None, multiplier_mode=False, candidate_order="fcfs"):
+             observation=None, multiplier_mode=False, candidate_order=None, candidate_selector=None):
+    candidate_order = resolve_candidate_order(candidate_order, candidate_selector)
     rows = []
     for window, rate, replay in cases:
         policies = baseline_schedulers() if baselines else {}
@@ -166,7 +181,7 @@ def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, re
     def validate(episode):
         rows = evaluate({"dqn": model}, cohorts["validation"], hardware, profile, estimate, decisions,
                         observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config,
-                        candidate_order=config.get("rl_candidate_order", "fcfs"))
+                        candidate_order=configured_candidate_order(config))
         score = fmean(row["slo_attainment"] for row in rows)
         weight_delta = max(float(np.max(np.abs(model.params[key] - value))) for key, value in initial.items())
         selection.append(dict(seed=seed, episode=episode, updates=model.updates, max_weight_change=weight_delta,
@@ -185,7 +200,7 @@ def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, re
         env = TriageEnv(
             replay, hardware, profile, estimated_output_tokens=estimate, reward_config=reward,
             **decisions, **policy_options(replay, decisions, config.get("observation"),
-                                        config.get("rl_candidate_order", "fcfs")),
+                                        configured_candidate_order(config)),
         )
         state, info = env.reset(seed=seed)
         if info["is_terminal"]:
@@ -245,8 +260,7 @@ def run(config, processed_dir, output, checkpoint=None):
     if not seeds or any(type(seed) is not int or seed < 0 for seed in seeds) or len(set(seeds)) != len(seeds):
         raise ValueError("Use unique nonnegative integer seeds")
     arrival_settings(config)
-    if config.get("rl_candidate_order", "fcfs") not in ("fcfs", "length_aware"):
-        raise ValueError("rl_candidate_order must be fcfs or length_aware")
+    configured_candidate_order(config)
     cohorts, estimate, provenance = load_cohorts(processed_dir, config)
     hardware = HardwareConfig(**config["hardware"])
     profile = ServiceProfile()
@@ -280,7 +294,7 @@ def run(config, processed_dir, output, checkpoint=None):
         write_csv(output / "checkpoints.csv", selection)
     rows = evaluate(models, cohorts["validation"], hardware, profile, estimate, decisions, baselines=True,
                     observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config,
-                    candidate_order=config.get("rl_candidate_order", "fcfs"))
+                    candidate_order=configured_candidate_order(config))
     write_csv(output / "validation.csv", rows)
     write_json(output / "run.json", dict(
         **metadata, checkpoints=checkpoints, gymnasium=gymnasium.__version__, numpy=np.__version__,
