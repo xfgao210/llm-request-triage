@@ -1,0 +1,1062 @@
+{
+  "checkpoints": [
+    {
+      "episode": 8,
+      "seed": 7,
+      "sha256": "994fe73c56779ce8228facf96ef55881fa4c75b549d96fe0e284f9a5223d407d",
+      "validation_attainment": 0.910162163611624
+    },
+    {
+      "episode": 8,
+      "seed": 17,
+      "sha256": "11cc5b549a1219615b98b9bdbc90677c1a9994a5fd593936e9a3e5529c2ff37f",
+      "validation_attainment": 0.9104798421148695
+    },
+    {
+      "episode": 8,
+      "seed": 27,
+      "sha256": "db7cbae6ce3f3a9491a3bd5e1384bd07fd1092dffbeb3a326ebdc9aa76fec063",
+      "validation_attainment": 0.910162163611624
+    }
+  ],
+  "config": {
+    "agent": {
+      "discount_mode": "elapsed_time",
+      "gamma": 0.99,
+      "hidden": 32,
+      "learning_rate": 0.001
+    },
+    "candidate_selector": "length_aware",
+    "decisions": {
+      "defer_retry_s": 0.25,
+      "max_defers": 5
+    },
+    "episodes": 24,
+    "hardware": {
+      "gpu_name": "validation-kv-stress-4096-tokens",
+      "kv_block_size": 16,
+      "kv_total_blocks": 256,
+      "max_batch_size": 4
+    },
+    "observation": {
+      "include_episode_progress": false
+    },
+    "reward": {},
+    "seeds": [
+      7,
+      17,
+      27
+    ],
+    "slo_s": 5.0,
+    "target_rps": [
+      2.4,
+      4.8,
+      9.6
+    ],
+    "validate_every": 8
+  },
+  "data": {
+    "manifest_sha256": "eae49027357829ba62e5e976550cd4295057bea9faf6d90a44f0376d57e88464",
+    "source_sha256": "2299986a07388aa303ec2c41d1131e756db650a39ed6ef9dfe7cc3d7f9a43b8f",
+    "trace_sha256": "a39372e8e8b6037be624a6320702baaa2bdcdf5fa662ebd6bf4c0969184680a4"
+  },
+  "knee": 9.6,
+  "online_blocks": {
+    "mixed_traffic": [
+      [
+        {
+          "end_timestamp_s": 21215730,
+          "group": "mixed_traffic",
+          "input_tokens": 89142,
+          "output_tokens": 3038,
+          "range_id": 2,
+          "requests": 217,
+          "scenario_id": "test_004405",
+          "split": "test",
+          "start_timestamp_s": 21215430,
+          "window": 4405
+        },
+        {
+          "end_timestamp_s": 21216030,
+          "group": "mixed_traffic",
+          "input_tokens": 99835,
+          "output_tokens": 3379,
+          "range_id": 2,
+          "requests": 242,
+          "scenario_id": "test_004406",
+          "split": "test",
+          "start_timestamp_s": 21215730,
+          "window": 4406
+        },
+        {
+          "end_timestamp_s": 21216330,
+          "group": "mixed_traffic",
+          "input_tokens": 79972,
+          "output_tokens": 2674,
+          "range_id": 2,
+          "requests": 194,
+          "scenario_id": "test_004407",
+          "split": "test",
+          "start_timestamp_s": 21216030,
+          "window": 4407
+        }
+      ],
+      [
+        {
+          "end_timestamp_s": 21647730,
+          "group": "mixed_traffic",
+          "input_tokens": 152559,
+          "output_tokens": 38866,
+          "range_id": 2,
+          "requests": 410,
+          "scenario_id": "test_005845",
+          "split": "test",
+          "start_timestamp_s": 21647430,
+          "window": 5845
+        },
+        {
+          "end_timestamp_s": 21648030,
+          "group": "mixed_traffic",
+          "input_tokens": 155485,
+          "output_tokens": 38546,
+          "range_id": 2,
+          "requests": 415,
+          "scenario_id": "test_005846",
+          "split": "test",
+          "start_timestamp_s": 21647730,
+          "window": 5846
+        },
+        {
+          "end_timestamp_s": 21648330,
+          "group": "mixed_traffic",
+          "input_tokens": 157266,
+          "output_tokens": 39902,
+          "range_id": 2,
+          "requests": 420,
+          "scenario_id": "test_005847",
+          "split": "test",
+          "start_timestamp_s": 21648030,
+          "window": 5847
+        }
+      ],
+      [
+        {
+          "end_timestamp_s": 21836730,
+          "group": "mixed_traffic",
+          "input_tokens": 91452,
+          "output_tokens": 23310,
+          "range_id": 2,
+          "requests": 246,
+          "scenario_id": "test_006475",
+          "split": "test",
+          "start_timestamp_s": 21836430,
+          "window": 6475
+        },
+        {
+          "end_timestamp_s": 21837030,
+          "group": "mixed_traffic",
+          "input_tokens": 104094,
+          "output_tokens": 26125,
+          "range_id": 2,
+          "requests": 280,
+          "scenario_id": "test_006476",
+          "split": "test",
+          "start_timestamp_s": 21836730,
+          "window": 6476
+        },
+        {
+          "end_timestamp_s": 21837330,
+          "group": "mixed_traffic",
+          "input_tokens": 94390,
+          "output_tokens": 23588,
+          "range_id": 2,
+          "requests": 250,
+          "scenario_id": "test_006477",
+          "split": "test",
+          "start_timestamp_s": 21837030,
+          "window": 6477
+        }
+      ],
+      [
+        {
+          "end_timestamp_s": 22089630,
+          "group": "mixed_traffic",
+          "input_tokens": 48351,
+          "output_tokens": 18831,
+          "range_id": 2,
+          "requests": 145,
+          "scenario_id": "test_007318",
+          "split": "test",
+          "start_timestamp_s": 22089330,
+          "window": 7318
+        },
+        {
+          "end_timestamp_s": 22089930,
+          "group": "mixed_traffic",
+          "input_tokens": 45203,
+          "output_tokens": 18003,
+          "range_id": 2,
+          "requests": 135,
+          "scenario_id": "test_007319",
+          "split": "test",
+          "start_timestamp_s": 22089630,
+          "window": 7319
+        },
+        {
+          "end_timestamp_s": 22090230,
+          "group": "mixed_traffic",
+          "input_tokens": 47156,
+          "output_tokens": 18377,
+          "range_id": 2,
+          "requests": 143,
+          "scenario_id": "test_007320",
+          "split": "test",
+          "start_timestamp_s": 22089930,
+          "window": 7320
+        }
+      ]
+    ],
+    "peak_heavy": [
+      [
+        {
+          "end_timestamp_s": 23152830,
+          "group": "peak_heavy",
+          "input_tokens": 74076,
+          "output_tokens": 23788,
+          "range_id": 3,
+          "requests": 385,
+          "scenario_id": "test_007794",
+          "split": "test",
+          "start_timestamp_s": 23152530,
+          "window": 7794
+        },
+        {
+          "end_timestamp_s": 23153130,
+          "group": "peak_heavy",
+          "input_tokens": 72463,
+          "output_tokens": 24572,
+          "range_id": 3,
+          "requests": 402,
+          "scenario_id": "test_007795",
+          "split": "test",
+          "start_timestamp_s": 23152830,
+          "window": 7795
+        },
+        {
+          "end_timestamp_s": 23153430,
+          "group": "peak_heavy",
+          "input_tokens": 36851,
+          "output_tokens": 11632,
+          "range_id": 3,
+          "requests": 182,
+          "scenario_id": "test_007796",
+          "split": "test",
+          "start_timestamp_s": 23153130,
+          "window": 7796
+        }
+      ],
+      [
+        {
+          "end_timestamp_s": 23234730,
+          "group": "peak_heavy",
+          "input_tokens": 817726,
+          "output_tokens": 59190,
+          "range_id": 3,
+          "requests": 2080,
+          "scenario_id": "test_008067",
+          "split": "test",
+          "start_timestamp_s": 23234430,
+          "window": 8067
+        },
+        {
+          "end_timestamp_s": 23235030,
+          "group": "peak_heavy",
+          "input_tokens": 564150,
+          "output_tokens": 45542,
+          "range_id": 3,
+          "requests": 1256,
+          "scenario_id": "test_008068",
+          "split": "test",
+          "start_timestamp_s": 23234730,
+          "window": 8068
+        },
+        {
+          "end_timestamp_s": 23235330,
+          "group": "peak_heavy",
+          "input_tokens": 594141,
+          "output_tokens": 52027,
+          "range_id": 3,
+          "requests": 1448,
+          "scenario_id": "test_008069",
+          "split": "test",
+          "start_timestamp_s": 23235030,
+          "window": 8069
+        }
+      ],
+      [
+        {
+          "end_timestamp_s": 23394930,
+          "group": "peak_heavy",
+          "input_tokens": 552227,
+          "output_tokens": 14413,
+          "range_id": 3,
+          "requests": 1675,
+          "scenario_id": "test_008601",
+          "split": "test",
+          "start_timestamp_s": 23394630,
+          "window": 8601
+        },
+        {
+          "end_timestamp_s": 23395230,
+          "group": "peak_heavy",
+          "input_tokens": 583418,
+          "output_tokens": 15365,
+          "range_id": 3,
+          "requests": 1765,
+          "scenario_id": "test_008602",
+          "split": "test",
+          "start_timestamp_s": 23394930,
+          "window": 8602
+        },
+        {
+          "end_timestamp_s": 23395530,
+          "group": "peak_heavy",
+          "input_tokens": 556318,
+          "output_tokens": 14315,
+          "range_id": 3,
+          "requests": 1695,
+          "scenario_id": "test_008603",
+          "split": "test",
+          "start_timestamp_s": 23395230,
+          "window": 8603
+        }
+      ],
+      [
+        {
+          "end_timestamp_s": 23567730,
+          "group": "peak_heavy",
+          "input_tokens": 620828,
+          "output_tokens": 54621,
+          "range_id": 3,
+          "requests": 325,
+          "scenario_id": "test_009177",
+          "split": "test",
+          "start_timestamp_s": 23567430,
+          "window": 9177
+        },
+        {
+          "end_timestamp_s": 23568030,
+          "group": "peak_heavy",
+          "input_tokens": 630897,
+          "output_tokens": 57375,
+          "range_id": 3,
+          "requests": 321,
+          "scenario_id": "test_009178",
+          "split": "test",
+          "start_timestamp_s": 23567730,
+          "window": 9178
+        },
+        {
+          "end_timestamp_s": 23568330,
+          "group": "peak_heavy",
+          "input_tokens": 596689,
+          "output_tokens": 55342,
+          "range_id": 3,
+          "requests": 322,
+          "scenario_id": "test_009179",
+          "split": "test",
+          "start_timestamp_s": 23568030,
+          "window": 9179
+        }
+      ]
+    ]
+  },
+  "online_settings": {
+    "epsilon": 0.0,
+    "learning_rate": 1e-05,
+    "max_updates": 100,
+    "min_new_outcomes": 32,
+    "min_update_seconds": 1.0,
+    "update_interval": 32,
+    "warmup": 256
+  },
+  "protocol_sha256": "bb0bb642015e6c1bf9093ed60c0e615319490327364bb49481309a1568533c2b",
+  "rates": [
+    2.4,
+    4.8,
+    9.6
+  ],
+  "validation_rules": {
+    "2.4": {
+      "0": "length_aware",
+      "0.05": "slack_-1",
+      "0.1": "slack_-1",
+      "0.2": "slack_-1",
+      "0.3": "slack_-1"
+    },
+    "4.8": {
+      "0": "length_aware",
+      "0.05": "slack_-1",
+      "0.1": "slack_-1",
+      "0.2": "slack_-1",
+      "0.3": "slack_-1"
+    },
+    "9.6": {
+      "0": "length_aware",
+      "0.05": "length_aware",
+      "0.1": "slack_-2",
+      "0.2": "slack_-1",
+      "0.3": "slack_-1"
+    }
+  },
+  "windows": [
+    {
+      "end_timestamp_s": 19485930,
+      "group": "training",
+      "input_tokens": 347440,
+      "output_tokens": 4077,
+      "range_id": 0,
+      "requests": 466,
+      "scenario_id": "train_000076",
+      "split": "train",
+      "start_timestamp_s": 19485630,
+      "window": 76
+    },
+    {
+      "end_timestamp_s": 19640430,
+      "group": "training",
+      "input_tokens": 50216,
+      "output_tokens": 1197,
+      "range_id": 0,
+      "requests": 399,
+      "scenario_id": "train_000591",
+      "split": "train",
+      "start_timestamp_s": 19640130,
+      "window": 591
+    },
+    {
+      "end_timestamp_s": 19680330,
+      "group": "training",
+      "input_tokens": 626323,
+      "output_tokens": 8105,
+      "range_id": 0,
+      "requests": 832,
+      "scenario_id": "train_000724",
+      "split": "train",
+      "start_timestamp_s": 19680030,
+      "window": 724
+    },
+    {
+      "end_timestamp_s": 19769430,
+      "group": "training",
+      "input_tokens": 494481,
+      "output_tokens": 6802,
+      "range_id": 0,
+      "requests": 650,
+      "scenario_id": "train_001021",
+      "split": "train",
+      "start_timestamp_s": 19769130,
+      "window": 1021
+    },
+    {
+      "end_timestamp_s": 19823130,
+      "group": "training",
+      "input_tokens": 49098,
+      "output_tokens": 1029,
+      "range_id": 0,
+      "requests": 147,
+      "scenario_id": "train_001200",
+      "split": "train",
+      "start_timestamp_s": 19822830,
+      "window": 1200
+    },
+    {
+      "end_timestamp_s": 19846530,
+      "group": "training",
+      "input_tokens": 538367,
+      "output_tokens": 7532,
+      "range_id": 0,
+      "requests": 700,
+      "scenario_id": "train_001278",
+      "split": "train",
+      "start_timestamp_s": 19846230,
+      "window": 1278
+    },
+    {
+      "end_timestamp_s": 19920930,
+      "group": "training",
+      "input_tokens": 104407,
+      "output_tokens": 1924,
+      "range_id": 0,
+      "requests": 270,
+      "scenario_id": "train_001526",
+      "split": "train",
+      "start_timestamp_s": 19920630,
+      "window": 1526
+    },
+    {
+      "end_timestamp_s": 19997730,
+      "group": "training",
+      "input_tokens": 119932,
+      "output_tokens": 2235,
+      "range_id": 0,
+      "requests": 191,
+      "scenario_id": "train_001782",
+      "split": "train",
+      "start_timestamp_s": 19997430,
+      "window": 1782
+    },
+    {
+      "end_timestamp_s": 20014230,
+      "group": "training",
+      "input_tokens": 89847,
+      "output_tokens": 26147,
+      "range_id": 0,
+      "requests": 283,
+      "scenario_id": "train_001837",
+      "split": "train",
+      "start_timestamp_s": 20013930,
+      "window": 1837
+    },
+    {
+      "end_timestamp_s": 20040330,
+      "group": "training",
+      "input_tokens": 186564,
+      "output_tokens": 2813,
+      "range_id": 0,
+      "requests": 283,
+      "scenario_id": "train_001924",
+      "split": "train",
+      "start_timestamp_s": 20040030,
+      "window": 1924
+    },
+    {
+      "end_timestamp_s": 20050530,
+      "group": "training",
+      "input_tokens": 283600,
+      "output_tokens": 4175,
+      "range_id": 0,
+      "requests": 427,
+      "scenario_id": "train_001958",
+      "split": "train",
+      "start_timestamp_s": 20050230,
+      "window": 1958
+    },
+    {
+      "end_timestamp_s": 20061330,
+      "group": "training",
+      "input_tokens": 98730,
+      "output_tokens": 1694,
+      "range_id": 0,
+      "requests": 228,
+      "scenario_id": "train_001994",
+      "split": "train",
+      "start_timestamp_s": 20061030,
+      "window": 1994
+    },
+    {
+      "end_timestamp_s": 20263530,
+      "group": "training",
+      "input_tokens": 92478,
+      "output_tokens": 3675,
+      "range_id": 0,
+      "requests": 160,
+      "scenario_id": "train_002668",
+      "split": "train",
+      "start_timestamp_s": 20263230,
+      "window": 2668
+    },
+    {
+      "end_timestamp_s": 20289030,
+      "group": "training",
+      "input_tokens": 68300,
+      "output_tokens": 203690,
+      "range_id": 0,
+      "requests": 1511,
+      "scenario_id": "train_002753",
+      "split": "train",
+      "start_timestamp_s": 20288730,
+      "window": 2753
+    },
+    {
+      "end_timestamp_s": 20306130,
+      "group": "training",
+      "input_tokens": 209433,
+      "output_tokens": 3706,
+      "range_id": 0,
+      "requests": 406,
+      "scenario_id": "train_002810",
+      "split": "train",
+      "start_timestamp_s": 20305830,
+      "window": 2810
+    },
+    {
+      "end_timestamp_s": 20342730,
+      "group": "training",
+      "input_tokens": 106914,
+      "output_tokens": 14847,
+      "range_id": 0,
+      "requests": 372,
+      "scenario_id": "train_002932",
+      "split": "train",
+      "start_timestamp_s": 20342430,
+      "window": 2932
+    },
+    {
+      "end_timestamp_s": 20352930,
+      "group": "training",
+      "input_tokens": 805074,
+      "output_tokens": 4284,
+      "range_id": 0,
+      "requests": 1086,
+      "scenario_id": "train_002966",
+      "split": "train",
+      "start_timestamp_s": 20352630,
+      "window": 2966
+    },
+    {
+      "end_timestamp_s": 20374530,
+      "group": "training",
+      "input_tokens": 9674,
+      "output_tokens": 67981,
+      "range_id": 0,
+      "requests": 381,
+      "scenario_id": "train_003038",
+      "split": "train",
+      "start_timestamp_s": 20374230,
+      "window": 3038
+    },
+    {
+      "end_timestamp_s": 20389830,
+      "group": "training",
+      "input_tokens": 20615,
+      "output_tokens": 28073,
+      "range_id": 0,
+      "requests": 714,
+      "scenario_id": "train_003089",
+      "split": "train",
+      "start_timestamp_s": 20389530,
+      "window": 3089
+    },
+    {
+      "end_timestamp_s": 20408130,
+      "group": "training",
+      "input_tokens": 9138,
+      "output_tokens": 32727,
+      "range_id": 0,
+      "requests": 402,
+      "scenario_id": "train_003150",
+      "split": "train",
+      "start_timestamp_s": 20407830,
+      "window": 3150
+    },
+    {
+      "end_timestamp_s": 20421330,
+      "group": "training",
+      "input_tokens": 19581,
+      "output_tokens": 19253,
+      "range_id": 0,
+      "requests": 715,
+      "scenario_id": "train_003194",
+      "split": "train",
+      "start_timestamp_s": 20421030,
+      "window": 3194
+    },
+    {
+      "end_timestamp_s": 20442330,
+      "group": "training",
+      "input_tokens": 163764,
+      "output_tokens": 10041,
+      "range_id": 0,
+      "requests": 227,
+      "scenario_id": "train_003264",
+      "split": "train",
+      "start_timestamp_s": 20442030,
+      "window": 3264
+    },
+    {
+      "end_timestamp_s": 20452530,
+      "group": "training",
+      "input_tokens": 374894,
+      "output_tokens": 5206,
+      "range_id": 0,
+      "requests": 480,
+      "scenario_id": "train_003298",
+      "split": "train",
+      "start_timestamp_s": 20452230,
+      "window": 3298
+    },
+    {
+      "end_timestamp_s": 20463030,
+      "group": "training",
+      "input_tokens": 302874,
+      "output_tokens": 4158,
+      "range_id": 0,
+      "requests": 400,
+      "scenario_id": "train_003333",
+      "split": "train",
+      "start_timestamp_s": 20462730,
+      "window": 3333
+    },
+    {
+      "end_timestamp_s": 20513430,
+      "group": "validation",
+      "input_tokens": 137493,
+      "output_tokens": 1970,
+      "range_id": 1,
+      "requests": 250,
+      "scenario_id": "validation_003500",
+      "split": "validation",
+      "start_timestamp_s": 20513130,
+      "window": 3500
+    },
+    {
+      "end_timestamp_s": 20525430,
+      "group": "validation",
+      "input_tokens": 185101,
+      "output_tokens": 2463,
+      "range_id": 1,
+      "requests": 317,
+      "scenario_id": "validation_003540",
+      "split": "validation",
+      "start_timestamp_s": 20525130,
+      "window": 3540
+    },
+    {
+      "end_timestamp_s": 20537430,
+      "group": "validation",
+      "input_tokens": 434581,
+      "output_tokens": 5123,
+      "range_id": 1,
+      "requests": 582,
+      "scenario_id": "validation_003580",
+      "split": "validation",
+      "start_timestamp_s": 20537130,
+      "window": 3580
+    },
+    {
+      "end_timestamp_s": 20566830,
+      "group": "validation",
+      "input_tokens": 218469,
+      "output_tokens": 2759,
+      "range_id": 1,
+      "requests": 431,
+      "scenario_id": "validation_003678",
+      "split": "validation",
+      "start_timestamp_s": 20566530,
+      "window": 3678
+    },
+    {
+      "end_timestamp_s": 20579130,
+      "group": "validation",
+      "input_tokens": 207855,
+      "output_tokens": 2701,
+      "range_id": 1,
+      "requests": 316,
+      "scenario_id": "validation_003719",
+      "split": "validation",
+      "start_timestamp_s": 20578830,
+      "window": 3719
+    },
+    {
+      "end_timestamp_s": 20592330,
+      "group": "validation",
+      "input_tokens": 159435,
+      "output_tokens": 1846,
+      "range_id": 1,
+      "requests": 209,
+      "scenario_id": "validation_003763",
+      "split": "validation",
+      "start_timestamp_s": 20592030,
+      "window": 3763
+    },
+    {
+      "end_timestamp_s": 21215730,
+      "group": "mixed_traffic",
+      "input_tokens": 89142,
+      "output_tokens": 3038,
+      "range_id": 2,
+      "requests": 217,
+      "scenario_id": "test_004405",
+      "split": "test",
+      "start_timestamp_s": 21215430,
+      "window": 4405
+    },
+    {
+      "end_timestamp_s": 21216030,
+      "group": "mixed_traffic",
+      "input_tokens": 99835,
+      "output_tokens": 3379,
+      "range_id": 2,
+      "requests": 242,
+      "scenario_id": "test_004406",
+      "split": "test",
+      "start_timestamp_s": 21215730,
+      "window": 4406
+    },
+    {
+      "end_timestamp_s": 21216330,
+      "group": "mixed_traffic",
+      "input_tokens": 79972,
+      "output_tokens": 2674,
+      "range_id": 2,
+      "requests": 194,
+      "scenario_id": "test_004407",
+      "split": "test",
+      "start_timestamp_s": 21216030,
+      "window": 4407
+    },
+    {
+      "end_timestamp_s": 21647730,
+      "group": "mixed_traffic",
+      "input_tokens": 152559,
+      "output_tokens": 38866,
+      "range_id": 2,
+      "requests": 410,
+      "scenario_id": "test_005845",
+      "split": "test",
+      "start_timestamp_s": 21647430,
+      "window": 5845
+    },
+    {
+      "end_timestamp_s": 21648030,
+      "group": "mixed_traffic",
+      "input_tokens": 155485,
+      "output_tokens": 38546,
+      "range_id": 2,
+      "requests": 415,
+      "scenario_id": "test_005846",
+      "split": "test",
+      "start_timestamp_s": 21647730,
+      "window": 5846
+    },
+    {
+      "end_timestamp_s": 21648330,
+      "group": "mixed_traffic",
+      "input_tokens": 157266,
+      "output_tokens": 39902,
+      "range_id": 2,
+      "requests": 420,
+      "scenario_id": "test_005847",
+      "split": "test",
+      "start_timestamp_s": 21648030,
+      "window": 5847
+    },
+    {
+      "end_timestamp_s": 21836730,
+      "group": "mixed_traffic",
+      "input_tokens": 91452,
+      "output_tokens": 23310,
+      "range_id": 2,
+      "requests": 246,
+      "scenario_id": "test_006475",
+      "split": "test",
+      "start_timestamp_s": 21836430,
+      "window": 6475
+    },
+    {
+      "end_timestamp_s": 21837030,
+      "group": "mixed_traffic",
+      "input_tokens": 104094,
+      "output_tokens": 26125,
+      "range_id": 2,
+      "requests": 280,
+      "scenario_id": "test_006476",
+      "split": "test",
+      "start_timestamp_s": 21836730,
+      "window": 6476
+    },
+    {
+      "end_timestamp_s": 21837330,
+      "group": "mixed_traffic",
+      "input_tokens": 94390,
+      "output_tokens": 23588,
+      "range_id": 2,
+      "requests": 250,
+      "scenario_id": "test_006477",
+      "split": "test",
+      "start_timestamp_s": 21837030,
+      "window": 6477
+    },
+    {
+      "end_timestamp_s": 22089630,
+      "group": "mixed_traffic",
+      "input_tokens": 48351,
+      "output_tokens": 18831,
+      "range_id": 2,
+      "requests": 145,
+      "scenario_id": "test_007318",
+      "split": "test",
+      "start_timestamp_s": 22089330,
+      "window": 7318
+    },
+    {
+      "end_timestamp_s": 22089930,
+      "group": "mixed_traffic",
+      "input_tokens": 45203,
+      "output_tokens": 18003,
+      "range_id": 2,
+      "requests": 135,
+      "scenario_id": "test_007319",
+      "split": "test",
+      "start_timestamp_s": 22089630,
+      "window": 7319
+    },
+    {
+      "end_timestamp_s": 22090230,
+      "group": "mixed_traffic",
+      "input_tokens": 47156,
+      "output_tokens": 18377,
+      "range_id": 2,
+      "requests": 143,
+      "scenario_id": "test_007320",
+      "split": "test",
+      "start_timestamp_s": 22089930,
+      "window": 7320
+    },
+    {
+      "end_timestamp_s": 23152830,
+      "group": "peak_heavy",
+      "input_tokens": 74076,
+      "output_tokens": 23788,
+      "range_id": 3,
+      "requests": 385,
+      "scenario_id": "test_007794",
+      "split": "test",
+      "start_timestamp_s": 23152530,
+      "window": 7794
+    },
+    {
+      "end_timestamp_s": 23153130,
+      "group": "peak_heavy",
+      "input_tokens": 72463,
+      "output_tokens": 24572,
+      "range_id": 3,
+      "requests": 402,
+      "scenario_id": "test_007795",
+      "split": "test",
+      "start_timestamp_s": 23152830,
+      "window": 7795
+    },
+    {
+      "end_timestamp_s": 23153430,
+      "group": "peak_heavy",
+      "input_tokens": 36851,
+      "output_tokens": 11632,
+      "range_id": 3,
+      "requests": 182,
+      "scenario_id": "test_007796",
+      "split": "test",
+      "start_timestamp_s": 23153130,
+      "window": 7796
+    },
+    {
+      "end_timestamp_s": 23234730,
+      "group": "peak_heavy",
+      "input_tokens": 817726,
+      "output_tokens": 59190,
+      "range_id": 3,
+      "requests": 2080,
+      "scenario_id": "test_008067",
+      "split": "test",
+      "start_timestamp_s": 23234430,
+      "window": 8067
+    },
+    {
+      "end_timestamp_s": 23235030,
+      "group": "peak_heavy",
+      "input_tokens": 564150,
+      "output_tokens": 45542,
+      "range_id": 3,
+      "requests": 1256,
+      "scenario_id": "test_008068",
+      "split": "test",
+      "start_timestamp_s": 23234730,
+      "window": 8068
+    },
+    {
+      "end_timestamp_s": 23235330,
+      "group": "peak_heavy",
+      "input_tokens": 594141,
+      "output_tokens": 52027,
+      "range_id": 3,
+      "requests": 1448,
+      "scenario_id": "test_008069",
+      "split": "test",
+      "start_timestamp_s": 23235030,
+      "window": 8069
+    },
+    {
+      "end_timestamp_s": 23394930,
+      "group": "peak_heavy",
+      "input_tokens": 552227,
+      "output_tokens": 14413,
+      "range_id": 3,
+      "requests": 1675,
+      "scenario_id": "test_008601",
+      "split": "test",
+      "start_timestamp_s": 23394630,
+      "window": 8601
+    },
+    {
+      "end_timestamp_s": 23395230,
+      "group": "peak_heavy",
+      "input_tokens": 583418,
+      "output_tokens": 15365,
+      "range_id": 3,
+      "requests": 1765,
+      "scenario_id": "test_008602",
+      "split": "test",
+      "start_timestamp_s": 23394930,
+      "window": 8602
+    },
+    {
+      "end_timestamp_s": 23395530,
+      "group": "peak_heavy",
+      "input_tokens": 556318,
+      "output_tokens": 14315,
+      "range_id": 3,
+      "requests": 1695,
+      "scenario_id": "test_008603",
+      "split": "test",
+      "start_timestamp_s": 23395230,
+      "window": 8603
+    },
+    {
+      "end_timestamp_s": 23567730,
+      "group": "peak_heavy",
+      "input_tokens": 620828,
+      "output_tokens": 54621,
+      "range_id": 3,
+      "requests": 325,
+      "scenario_id": "test_009177",
+      "split": "test",
+      "start_timestamp_s": 23567430,
+      "window": 9177
+    },
+    {
+      "end_timestamp_s": 23568030,
+      "group": "peak_heavy",
+      "input_tokens": 630897,
+      "output_tokens": 57375,
+      "range_id": 3,
+      "requests": 321,
+      "scenario_id": "test_009178",
+      "split": "test",
+      "start_timestamp_s": 23567730,
+      "window": 9178
+    },
+    {
+      "end_timestamp_s": 23568330,
+      "group": "peak_heavy",
+      "input_tokens": 596689,
+      "output_tokens": 55342,
+      "range_id": 3,
+      "requests": 322,
+      "scenario_id": "test_009179",
+      "split": "test",
+      "start_timestamp_s": 23568030,
+      "window": 9179
+    }
+  ]
+}

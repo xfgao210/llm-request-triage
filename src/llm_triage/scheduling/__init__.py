@@ -12,10 +12,13 @@ from .baselines import baseline_schedulers
 from .fcfs import FCFSScheduler
 from .length_aware import LengthAwareScheduler
 from .slo_aware import StaticSLOAwareScheduler
+from .burst_switch import BurstSwitchConfig, BurstSwitchScheduler
 
 Scheduler = SchedulerCallback
 
 __all__ = [
+    "BurstSwitchConfig",
+    "BurstSwitchScheduler",
     "Action",
     "CandidateView",
     "Decision",

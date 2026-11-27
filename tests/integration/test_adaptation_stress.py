@@ -464,6 +464,36 @@ def test_continuous_first_range_has_one_reset_per_policy(stress_data, tmp_path, 
     assert len(trace.read_text().splitlines()) == 1  # Full decision logs disabled.
 
 
+def test_noninteger_timeline_width_accepts_an_exact_boundary_arrival(stress_data, tmp_path):
+    source_data, _, config, source, ranges_path = stress_data
+    # At 9x, this arrival is exactly 20 simulated seconds, the third 60/9
+    # timeline edge. Quotient-floor indexing incorrectly placed it in bin 2.
+    with source.open(newline="") as stream:
+        source_rows = list(csv.reader(stream))
+    source_rows.extend([[1680, "", 1, "ChatGPT", 16, 4, 20, "API log"] for _ in range(2)])
+    source_rows[1:] = sorted(source_rows[1:], key=lambda row: float(row[0]))
+    with source.open("w", newline="") as stream:
+        csv.writer(stream).writerows(source_rows)
+    ranges = json.loads(ranges_path.read_text())
+    ranges["source_sha256"] = sha256(source)
+    new_ranges = tmp_path / "boundary-ranges.json"
+    new_ranges.write_text(json.dumps(ranges))
+    analysis = tmp_path / "boundary-analysis"
+    analyze(source, analysis)
+    data = tmp_path / "boundary-data"
+    manifest = prepare_ranges(source, analysis, data, new_ranges)
+    training = tmp_path / "boundary-training"
+    train(config, data, training)
+    windows = stress.select_evaluation_windows(manifest, seconds=300)[:1]
+    output = tmp_path / "boundary-evaluation"
+    rows = stress.run(training / "training", data, output, windows, multipliers=[9],
+                      policies=["fcfs"], timeline_source_bin_s=60, device="cpu")
+    assert rows[0]["arrivals"] == 82
+    timeline = json.loads((output / "mixed_traffic/load_9/fcfs/timeline.json").read_text())
+    assert timeline[3]["arrivals"] == 2
+    assert sum(row["arrivals"] for row in timeline) == 82
+
+
 def test_continuous_notebook_runs_to_export_on_small_trace(stress_data, tmp_path, monkeypatch):
     import zipfile
     import matplotlib

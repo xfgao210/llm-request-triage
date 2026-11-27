@@ -1,0 +1,9 @@
+{
+  "recent_window_s": 1.0,
+  "reference_window_s": 10.0,
+  "enter_ratio": 2.0,
+  "exit_ratio": 1.2,
+  "min_reference_rps": 1.0,
+  "min_recent_arrivals": 3,
+  "min_dwell_s": 2.0
+}

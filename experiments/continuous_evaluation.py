@@ -1,4 +1,4 @@
-"""Whole-range replay and retrospective reporting; reporting never resets state."""
+"""Continuous selected-range replay; retrospective reporting never resets state."""
 
 import csv
 import json
@@ -59,8 +59,8 @@ def run(training_dir, data_dir, output, *, multiplier=8, seed=7, include_adaptin
         progress_interval_s=30, pilot_start_timestamp_s=None):
     """Four policies by default. Optional adaptation uses an explicit time gate.
 
-    The shared runner receives ONE full-range window, hence exactly one
-    environment per policy. Only the end of the entire range is fully drained.
+    The shared runner receives ONE selected continuous interval, hence exactly
+    one environment per policy. Only the end of that interval is fully drained.
     Completed policy cases are resumable; interrupted cases restart from zero.
     """
     training_dir, data_dir, output = map(Path, (training_dir, data_dir, output))

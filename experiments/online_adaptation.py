@@ -14,7 +14,7 @@ import time
 
 import numpy as np
 
-from experiments.train_dqn import policy_options, write_csv, write_json
+from experiments.train_dqn import configured_candidate_order, policy_options, write_csv, write_json
 from llm_triage.metrics import evaluate_events
 from llm_triage.metrics.summary import summarize_records
 from llm_triage.rl import RewardConfig, TriageEnv
@@ -64,7 +64,7 @@ def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.
                     reward_config=RewardConfig(**record["reward_config"]),
                     **config["decisions"],
                     **policy_options(replay, config["decisions"], config.get("observation"),
-                                     config.get("rl_candidate_order", "fcfs")))
+                                     configured_candidate_order(config)))
     state, info = env.reset(seed=seed, options={"requests": replay})
     schedule = OnlineUpdateSchedule(update_interval, min_update_seconds, min_new_outcomes, max_updates,
                                     last_time_s=info["now_s"])

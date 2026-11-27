@@ -158,3 +158,20 @@ def test_progress_observation_does_not_change_simulation_outcomes():
     assert reference.total_time == observed.total_time
     assert [(r.state, r.completion_time, r.gpu_time_s) for r in reference.requests] == [
         (r.state, r.completion_time, r.gpu_time_s) for r in observed.requests]
+
+
+def test_counterfactual_fork_detaches_live_progress_observer():
+    from llm_triage.simulation import Request, TriageKernel
+
+    class Observer:
+        def __call__(self, kernel):
+            pass
+
+        def __deepcopy__(self, memo):
+            raise AssertionError("Live progress observer must not enter an offline fork")
+
+    kernel = TriageKernel(progress_callback=Observer())
+    kernel.reset([Request("a", 0, 16, 4, 5)])
+    branch = kernel.fork()
+    assert branch._progress_callback is None
+    assert kernel._progress_callback is not None

@@ -38,10 +38,12 @@ frozen test scenarios, and exports charts and a shareable HTML report.
 For a separate past-feedback-only experiment, use the
 [online adaptation notebook](notebooks/colab_burstgpt3_online_adaptation.ipynb).
 It trains clock-disabled models at mixed arrival loads, then compares all three
-baselines with frozen/adapting DQN at 1×/4×/8× load on short paired windows.
-It includes TTFT/coverage metrics, per-policy caching and a unified report.
-The default quick mode runs only the unchanged 8× peak condition with all five
-policies and one seed; full mode enables the entire configured comparison.
+baselines with frozen/adapting DQN on short paired windows. The default full
+comparison selects five disjoint windows per group at 8×; arrival multipliers
+and window count remain configurable. It includes workload descriptors,
+TTFT/coverage metrics, per-policy caching and a unified report.
+Quick mode runs only the unchanged 8× peak condition with all five policies
+and one seed; full mode enables the entire configured comparison.
 Quick mode does not thin requests or shorten windows. Shorter, undertrained
 smoke-test training is a separate explicit option.
 The stability workflow adds consistent elapsed-time bootstrapping, a conservative
@@ -53,6 +55,14 @@ results ZIP is needed. See the [protocol](docs/online_adaptation.md).
 Both notebooks offer `DEVICE="auto"` (CUDA minibatch learning when available,
 CPU fallback), or explicit `cpu`/`cuda`. Simulation remains CPU-based; GPU mode
 is optional and may not be faster for this small network.
+
+For evaluation without retraining, use the
+[continuous replay notebook](notebooks/colab_burstgpt3_continuous_first_test.ipynb)
+with a completed source run and its prepared data/checkpoint. It defaults to a
+one-hour pilot inside the first test range, retaining every request in that
+interval. Queues never reset at reporting boundaries; 5/10/15-minute source-time
+reports can be regenerated without replaying. Full-range mode is explicit and
+can be very slow and memory-heavy. The preflight confirmation defaults off.
 
 Before retraining, use the [baseline capacity notebook](notebooks/colab_burstgpt3_capacity_sweep.ipynb)
 to compare FCFS, length-aware, and static SLO-aware on short development windows
@@ -87,6 +97,21 @@ checkpoints, checks their hashes, and runs the paired test comparison. See
 [the Week 3 results](results/week3/README.md) for the replay settings and output files.
 
 ## Components
+
+- [Hengyi's experiments and review order](docs/hengyi-work.md).
+
+- [Small learned FCFS / DQN selector](docs/policy_selector.md): offline
+  same-state rollouts, a shallow decision tree, and paired validation against
+  fixed policies and burst-based switching.
+- [KV-pressure selector comparison](docs/pressure_policy_selector.md): the
+  existing 4,096-token scenario and standard-cache control, with common
+  length ordering and the original causal 5% drop allowance.
+- [Full peak-heavy window at native 1x / 8x traffic](docs/traffic_8x.md):
+  all 10,435 requests, frozen policies and explicit multiplier semantics.
+
+- [Burst-aware FCFS / frozen-DQN switching](docs/burst_switching.md): causal
+  arrival-rate detection, hysteresis, per-episode switch traces, and paired
+  validation against fixed policies. Development thresholds require validation.
 
 - [Workload pipeline and original Week 1 handoff](docs/week1-hengyi.md).
 - [Simulator architecture](docs/simulator.md): continuous batching, paged

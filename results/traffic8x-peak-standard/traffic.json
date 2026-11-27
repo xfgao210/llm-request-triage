@@ -1,0 +1,33 @@
+{
+  "cases": [
+    {
+      "arrival_multiplier": 1.0,
+      "effective_rps": 11.594444444444445,
+      "horizon_s": 900.0,
+      "native_rps": 11.594444444444445,
+      "requests": 10435,
+      "window": 0
+    },
+    {
+      "arrival_multiplier": 8.0,
+      "effective_rps": 92.75555555555556,
+      "horizon_s": 112.5,
+      "native_rps": 11.594444444444445,
+      "requests": 10435,
+      "window": 0
+    }
+  ],
+  "scope": "peak",
+  "windows": [
+    {
+      "end_timestamp_s": 23443230,
+      "group": "peak_heavy",
+      "name": "peak_heavy",
+      "peak_subbin_rps": 11.893333333333333,
+      "requests": 10435,
+      "selection": "burst",
+      "split": "test",
+      "start_timestamp_s": 23442330
+    }
+  ]
+}
