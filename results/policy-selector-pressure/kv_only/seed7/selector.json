@@ -1,0 +1,79 @@
+{
+  "baseline": "length_order_admit_only",
+  "burst_config": {
+    "enter_ratio": 2.0,
+    "exit_ratio": 1.2,
+    "min_dwell_s": 2.0,
+    "min_recent_arrivals": 3,
+    "min_reference_rps": 1.0,
+    "recent_window_s": 1.0,
+    "reference_window_s": 10.0
+  },
+  "checkpoint_sha256": "af621c9069496d3aa1973acd556ab30f319d82118a46b1212f1d3dab14017399",
+  "drop_denominator": 20,
+  "enter_probability": 0.7,
+  "exit_probability": 0.4,
+  "features": [
+    "recent_rps",
+    "reference_rps",
+    "burst_ratio",
+    "eligible_queue_length",
+    "oldest_eligible_wait_s",
+    "candidate_slack_s",
+    "batch_utilization",
+    "kv_utilization"
+  ],
+  "root": {
+    "feature": 3,
+    "left": {
+      "feature": 5,
+      "left": {
+        "feature": 4,
+        "left": {
+          "probability": 0.46153846153846156,
+          "samples": 13
+        },
+        "right": {
+          "probability": 0.0,
+          "samples": 32
+        },
+        "threshold": 2.078359067440033
+      },
+      "right": {
+        "feature": 6,
+        "left": {
+          "probability": 0.011627906976744186,
+          "samples": 172
+        },
+        "right": {
+          "probability": 0.1,
+          "samples": 10
+        },
+        "threshold": 0.3125
+      },
+      "threshold": 3.904703736305237
+    },
+    "right": {
+      "feature": 6,
+      "left": {
+        "probability": 0.5714285714285714,
+        "samples": 14
+      },
+      "right": {
+        "feature": 1,
+        "left": {
+          "probability": 0.0,
+          "samples": 10
+        },
+        "right": {
+          "probability": 0.2,
+          "samples": 15
+        },
+        "threshold": 5.8999998569488525
+      },
+      "threshold": 0.171875
+    },
+    "threshold": 50.5
+  },
+  "schema_version": 1
+}

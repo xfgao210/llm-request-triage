@@ -1,5 +1,11 @@
 # BurstGPT data
 
+For local BurstGPT 3 and fixed-duration regular/peak scenarios, see
+[the BurstGPT 3 pipeline instructions](../docs/run_pipeline.md#burstgpt-3-continuous-periods-and-named-test-groups).
+These use a separate `data/burstgpt3/processed/` directory, with source and catalog
+checksums and explicit interval bounds in its manifest. The instructions below
+describe the original pinned BurstGPT 1 workload used for reproduction.
+
 Run `python scripts/prepare_burstgpt.py` from the repository root. The source is
 `HPMLL/BurstGPT`, pinned to `d895a53bb7b8ec137d0d2fe203b335835a78c10a`.
 The CSV SHA256 must be

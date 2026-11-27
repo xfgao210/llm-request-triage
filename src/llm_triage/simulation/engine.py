@@ -181,7 +181,11 @@ class TriageKernel:
         estimated_output_tokens: Optional[float] = None,
         service_estimator: Optional[Callable[[ int, float], float]] = None,
         priority_fn: Optional[Callable[[RequestView], object]] = None,
+        arrival_observer: Optional[Callable[[float], None]] = None,
         record_iterations: bool = True,
+        progress_callback: Optional[Callable[["TriageKernel"], None]] = None,
+        skip_blocked_admits: bool = False,
+        drop_blocked_candidate: Optional[Callable[[RequestView], bool]] = None,
     ) -> None:
         self.hw = hardware or HardwareConfig()
         self.profile = profile or ServiceProfile()
@@ -201,7 +205,11 @@ class TriageKernel:
         )
         self._service_estimator = service_estimator
         self._priority_fn = priority_fn
+        self._arrival_observer = arrival_observer
         self.record_iterations = bool(record_iterations)
+        self._progress_callback = progress_callback
+        self._skip_blocked_admits = skip_blocked_admits
+        self._drop_blocked_candidate = drop_blocked_candidate
 
         # Initialized in reset()
         self.requests: List[Request] = []
@@ -275,6 +283,35 @@ class TriageKernel:
     def is_terminal(self) -> bool:
         """``True`` when all requests have reached a terminal state."""
         return self._episode_ended
+
+    def fork(self, *, priority_fn=None, arrival_observer=None, arrivals_before_s=None):
+        """Copy a decision state for privileged offline counterfactual replay.
+
+        Mutable requests, queues and KV allocations remain internally linked
+        in the copy and independent of the source. Policy hooks are detached
+        before copying and explicitly rebound. Optional arrival truncation is
+        half-open; already arrived/running work is always retained. This API
+        contains ground truth and must never be handed to an online policy.
+        """
+        from copy import copy, deepcopy
+
+        if arrivals_before_s is not None:
+            _check_finite(arrivals_before_s, "arrivals_before_s", strictly_positive=True)
+            if arrivals_before_s <= self.now:
+                raise ValueError("Arrival cutoff must follow the fork time")
+        shell = copy(self)
+        shell._priority_fn = None
+        shell._arrival_observer = None
+        # Diagnostic observers may own large replay data or non-copyable state.
+        # Counterfactual branches must not copy or invoke the live replay logger.
+        shell._progress_callback = None
+        branch = deepcopy(shell)
+        branch._priority_fn = priority_fn
+        branch._arrival_observer = arrival_observer
+        if arrivals_before_s is not None:
+            branch.requests = [r for r in branch.requests if r.arrival_time < arrivals_before_s]
+            branch._pending = [r for r in branch._pending if r.arrival_time < arrivals_before_s]
+        return branch
 
     def events(self) -> Tuple[LifecycleEvent, ...]:
         """Return all chronological lifecycle events emitted so far."""
@@ -439,6 +476,8 @@ class TriageKernel:
             req.state = RequestState.QUEUED
             self.queue.append(req)
             self._next += 1
+            if self._arrival_observer is not None:
+                self._arrival_observer(req.arrival_time)
             self._emit(
                 EventType.ARRIVAL,
                 req.request_id,
@@ -589,11 +628,16 @@ class TriageKernel:
         if self._active_count() >= self.hw.max_batch_size or self.kv.blocks_free == 0:
             return []
         eligible: List[Request] = []
+        free_tokens = self.kv.blocks_free * self.hw.kv_block_size
         for r in self.queue:
             if r.request_id in self._deferred_in_pass:
                 continue
             cooldown = self._defer_until.get(r.request_id)
             if cooldown is not None and self.now < cooldown - 1e-12:
+                continue
+            if (self._skip_blocked_admits and r.input_tokens > free_tokens
+                    and (self._drop_blocked_candidate is None
+                         or not self._drop_blocked_candidate(self._view(r)))):
                 continue
             eligible.append(r)
         return eligible
@@ -604,6 +648,10 @@ class TriageKernel:
         while True:
             self._absorb_arrivals()
             self._prune_infeasible_and_expired()
+            # Observational hook, also reached during long decode/drain phases.
+            # It must not mutate kernel state or supply information to policies.
+            if self._progress_callback is not None:
+                self._progress_callback(self)
 
             if not self._should_interleave_decode():
                 self._resume_preempted()
@@ -819,6 +867,9 @@ def simulate(
     estimated_output_tokens: Optional[float] = None,
     service_estimator: Optional[Callable[[int, float], float]] = None,
     record_iterations: bool = True,
+    progress_callback: Optional[Callable[[TriageKernel], None]] = None,
+    skip_blocked_admits: bool = False,
+    drop_blocked_candidate: Optional[Callable[[RequestView], bool]] = None,
 ) -> SimResult:
     """Run one simulation episode to completion.
 
@@ -853,8 +904,20 @@ def simulate(
         for policy-visible service time estimation.
     record_iterations:
         Keep a per-iteration trace in ``SimResult.iterations``.
+    progress_callback:
+        Optional diagnostic observer called between simulator iterations. Never
+        used for policy decisions; must not modify state.
+    skip_blocked_admits:
+        Omit no-op blocked ADMIT callbacks and their decision events for fixed
+        policies whose action and priority depend only on each candidate.
+    drop_blocked_candidate:
+        With ``skip_blocked_admits``, keep blocked candidates that the policy
+        would drop. Leave unset for policies that only admit.
     """
     priority_fn = getattr(callback, "priority", None)
+    reset_episode = getattr(callback, "reset_episode", None)
+    if reset_episode is not None:
+        reset_episode()
     kernel = TriageKernel(
         hardware=hardware,
         profile=profile,
@@ -864,7 +927,11 @@ def simulate(
         estimated_output_tokens=estimated_output_tokens,
         service_estimator=service_estimator,
         priority_fn=priority_fn,
+        arrival_observer=getattr(callback, "observe_arrival", None),
         record_iterations=record_iterations,
+        progress_callback=progress_callback,
+        skip_blocked_admits=skip_blocked_admits,
+        drop_blocked_candidate=drop_blocked_candidate,
     )
     kernel.reset(workload)
     while not kernel.is_terminal():

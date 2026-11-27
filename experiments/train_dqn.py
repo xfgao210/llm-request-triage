@@ -6,6 +6,7 @@ import json
 import math
 from pathlib import Path
 import random
+import time
 from statistics import fmean
 
 import gymnasium
@@ -27,7 +28,8 @@ REPLAY_CAPACITY = 50_000
 UPDATE_INTERVAL = 4
 METRICS = (
     "arrivals", "completed", "slo_met", "slo_attainment", "drop_rate", "unfinished_rate",
-    "window_throughput_rps", "window_goodput_rps", "first_token_count", "p95_ttft_s",
+    "window_throughput_rps", "window_goodput_rps", "first_token_count", "p50_ttft_s", "p95_ttft_s", "p99_ttft_s",
+    "p95_completion_latency_s",
 )
 
 
@@ -42,19 +44,41 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
 
 
-def load_cohorts(processed_dir, config):
+def load_cohorts(processed_dir, config, splits=("train", "validation")):
     csv_path = processed_dir / "burstgpt_windows.csv"
     manifest_path = processed_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if sha256(csv_path) != manifest["selected_sha256"]:
         raise ValueError("Prepared windows differ from manifest")
     windows = load_windows(csv_path)
+    layout = {(item["split"], item["window"]): item for item in manifest.get("windows", [])}
+
+    def replay(key, rows, rate):
+        item = layout.get(key, {})
+        bounds = None
+        if manifest.get("windowing") == "fixed_duration":
+            bounds = (item["start_timestamp_s"], item["end_timestamp_s"])
+        target = rate
+        if "arrival_multipliers" in config:
+            if bounds is None:
+                raise ValueError("Arrival multipliers require fixed-duration windows")
+            target = len(rows) / (bounds[1] - bounds[0]) * rate
+        return replay_window(rows, slo_s=config["slo_s"], target_rps=target, bounds=bounds)
+
     cohorts = {}
-    for split in ("train", "validation"):
+    for split in splits:
+        keys = sorted(key for key in windows if key[0] == split)
+        limit = config.get("cohort_window_limit", {}).get(split)
+        if limit is not None:
+            if type(limit) is not int or limit < 1:
+                raise ValueError("cohort_window_limit values must be positive integers")
+            if len(keys) > limit:
+                # Deterministic temporal coverage, not outcome-based selection.
+                indices = [round(i * (len(keys) - 1) / max(1, limit - 1)) for i in range(limit)]
+                keys = [keys[index] for index in indices]
         cohorts[split] = [
-            (window, rate, replay_window(rows, slo_s=config["slo_s"], target_rps=rate))
-            for (partition, window), rows in sorted(windows.items()) if partition == split
-            for rate in config["target_rps"]
+            (key[1], rate, replay(key, windows[key], rate))
+            for key in keys for rate in arrival_settings(config)
         ]
         if not cohorts[split]:
             raise ValueError(f"Missing {split} windows")
@@ -69,10 +93,41 @@ def load_cohorts(processed_dir, config):
     }
 
 
-def policy_options(replay, decisions):
+def arrival_settings(config):
+    """Multipliers and absolute target RPS are distinct, mutually exclusive modes."""
+    multiplier_mode = "arrival_multipliers" in config
+    if multiplier_mode and config.get("target_rps", [None]) != [None]:
+        raise ValueError("Do not combine arrival_multipliers with absolute target_rps")
+    values = config["arrival_multipliers"] if multiplier_mode else config["target_rps"]
+    if not values or any((value is None and multiplier_mode) or (value is not None and (
+        isinstance(value, bool) or not isinstance(value, (int, float))
+        or not math.isfinite(value) or value <= 0)) for value in values) or len(set(values)) != len(values):
+        raise ValueError("Use unique positive arrival multipliers/rates (null only for native target_rps)")
+    return values
+
+
+def resolve_candidate_order(candidate_order=None, candidate_selector=None):
+    """Accept both experiment configuration names without changing saved metadata."""
+    if candidate_order is not None and candidate_selector is not None and candidate_order != candidate_selector:
+        raise ValueError("rl_candidate_order and candidate_selector must agree")
+    order = candidate_order if candidate_order is not None else candidate_selector
+    order = "fcfs" if order is None else order
+    if order not in ("fcfs", "length_aware"):
+        raise ValueError("rl_candidate_order / candidate_selector must be fcfs or length_aware")
+    return order
+
+
+def configured_candidate_order(config):
+    return resolve_candidate_order(config.get("rl_candidate_order"), config.get("candidate_selector"))
+
+
+def policy_options(replay, decisions, observation=None, candidate_order=None, *, candidate_selector=None):
+    candidate_order = resolve_candidate_order(candidate_order, candidate_selector)
     return dict(
+        candidate_selector=candidate_order,
         observation_config=ObservationConfig(
             preset="full", horizon_s=replay.horizon_s, max_defers=decisions["max_defers"],
+            **(observation or {}),
         ),
         # Reaching the kernel limit expires the request, so mask that final defer.
         mask_config=ActionMaskConfig(
@@ -82,14 +137,25 @@ def policy_options(replay, decisions):
     )
 
 
-def evaluate(models, cases, hardware, profile, estimate, decisions, *, baselines=False):
+def evaluate(models, cases, hardware, profile, estimate, decisions, *, baselines=False,
+             observation=None, multiplier_mode=False, candidate_order=None, candidate_selector=None,
+             burst_switch_config=None):
+    candidate_order = resolve_candidate_order(candidate_order, candidate_selector)
     rows = []
     for window, rate, replay in cases:
         policies = baseline_schedulers() if baselines else {}
         policies.update({
-            name: RLPolicyCallback(model, **policy_options(replay, decisions))
+            name: RLPolicyCallback(model, **policy_options(replay, decisions, observation, candidate_order))
             for name, model in models.items()
         })
+        if burst_switch_config is not None:
+            from llm_triage.scheduling import BurstSwitchScheduler
+            policies.update({
+                f"switch_{name}": BurstSwitchScheduler(
+                    RLPolicyCallback(model, **policy_options(replay, decisions, observation, candidate_order)),
+                    burst_switch_config,
+                ) for name, model in models.items()
+            })
         executor = SimulatorExecutor(
             replay.requests, hardware, profile, estimated_output_tokens=estimate,
             **decisions,
@@ -103,22 +169,36 @@ def evaluate(models, cases, hardware, profile, estimate, decisions, *, baselines
                 raise RuntimeError("Policy did not evaluate the complete paired cohort")
             if result.summary["slo_attainment"] != executor.results[name].slo_attainment:
                 raise RuntimeError("Simulator and metrics disagree on attainment")
-            rows.append(dict(policy=name, window=window, target_rps=rate,
+            rows.append(dict(policy=name, window=window,
+                             **({"arrival_multiplier": rate} if multiplier_mode else {"target_rps": rate}),
                              **{key: result.summary[key] for key in METRICS}))
+            if burst_switch_config is not None:
+                policy = policies[name]
+                counts = getattr(policy, "decisions", {})
+                switches = getattr(policy, "switches", [])
+                rows[-1].update(switch_count=len(switches),
+                                fcfs_decisions=counts.get("fcfs", 0),
+                                custom_decisions=counts.get("custom", 0),
+                                switch_trace_json=json.dumps(switches, sort_keys=True))
     return rows
 
 
 def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, reward, output, metadata):
     rng = random.Random(seed)
     model = DQN(seed=seed, **config.get("agent", {}))
+    print(f"seed={seed} learner={model.learner_runtime}", flush=True)
     initial = model.copy_weights()
-    replay_buffer = ReplayBuffer(REPLAY_CAPACITY, seed + 1000)
-    history, selection = [], []
+    replay_buffer = ReplayBuffer(REPLAY_CAPACITY, seed + 1000,
+                                 include_elapsed_time=model.discount_mode == "elapsed_time")
+    history, selection, update_history = [], [], []
     total_steps = 0
+    learner_seconds = 0.0
     best_score, best_weights, best_episode = -math.inf, None, None
 
     def validate(episode):
-        rows = evaluate({"dqn": model}, cohorts["validation"], hardware, profile, estimate, decisions)
+        rows = evaluate({"dqn": model}, cohorts["validation"], hardware, profile, estimate, decisions,
+                        observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config,
+                        candidate_order=configured_candidate_order(config))
         score = fmean(row["slo_attainment"] for row in rows)
         weight_delta = max(float(np.max(np.abs(model.params[key] - value))) for key, value in initial.items())
         selection.append(dict(seed=seed, episode=episode, updates=model.updates, max_weight_change=weight_delta,
@@ -128,10 +208,16 @@ def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, re
 
     validate(0)
     for episode in range(1, config["episodes"] + 1):
-        window, rate, replay = rng.choice(cohorts["train"])
+        candidates = cohorts["train"]
+        if "arrival_multipliers" in config:
+            # Balance exposure across load levels even in a short smoke run.
+            level = config["arrival_multipliers"][(episode - 1) % len(config["arrival_multipliers"])]
+            candidates = [case for case in candidates if case[1] == level]
+        window, rate, replay = rng.choice(candidates)
         env = TriageEnv(
             replay, hardware, profile, estimated_output_tokens=estimate, reward_config=reward,
-            **decisions, **policy_options(replay, decisions),
+            **decisions, **policy_options(replay, decisions, config.get("observation"),
+                                        configured_candidate_order(config)),
         )
         state, info = env.reset(seed=seed)
         if info["is_terminal"]:
@@ -142,17 +228,27 @@ def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, re
         done = False
         while not done:
             action = model.act(state, info["action_mask"], epsilon)
+            before_s = info["now_s"]
             next_state, value, done, truncated, next_info = env.step(action)
             if truncated:
                 raise RuntimeError("The finite trace environment truncated unexpectedly")
-            replay_buffer.add(state, action, value, next_state, done, next_info["action_mask"])
+            replay_buffer.add(state, action, value, next_state, done, next_info["action_mask"],
+                              elapsed_s=next_info["now_s"]-before_s)
             state, info = next_state, next_info
             total_steps += 1
             episode_reward += value
             if replay_buffer.size >= WARMUP and total_steps % UPDATE_INTERVAL == 0:
+                update_started = time.perf_counter()
                 losses.append(model.train_batch(replay_buffer.sample(BATCH_SIZE)))
-        history.append(dict(seed=seed, episode=episode, window=window, target_rps=rate, steps=total_steps,
-                            updates=model.updates, reward=episode_reward, loss=fmean(losses) if losses else None,
+                learner_seconds += time.perf_counter() - update_started
+                update_history.append(dict(seed=seed, episode=episode, update=model.updates,
+                                           step=total_steps, sim_time_s=info["now_s"],
+                                           epsilon=epsilon, loss=losses[-1]))
+        history.append(dict(seed=seed, episode=episode, window=window,
+                            **({"arrival_multiplier": rate} if "arrival_multipliers" in config else {"target_rps": rate}),
+                            steps=total_steps,
+                            updates=model.updates, learner_seconds=learner_seconds,
+                            reward=episode_reward, loss=fmean(losses) if losses else None,
                             train_attainment=info["episode_metrics"]["slo_attainment"],
                             train_drop_rate=info["episode_metrics"]["drop_rate"]))
         if episode % config["validate_every"] == 0 or episode == config["episodes"]:
@@ -161,9 +257,11 @@ def train_seed(seed, config, cohorts, hardware, profile, estimate, decisions, re
                 best_score, best_weights, best_episode = score, model.copy_weights(), episode
     if best_weights is None:
         raise RuntimeError("Training did not change the model weights")
+    write_csv(output / f"training_updates_seed{seed}.csv", update_history)
     model.params = best_weights
     path = output / f"dqn_seed{seed}.npz"
-    model.save(path, dict(metadata, seed=seed, episode=best_episode, validation_attainment=best_score))
+    model.save(path, dict(metadata, seed=seed, episode=best_episode, validation_attainment=best_score,
+                          learner_runtime=model.learner_runtime))
     restored, _ = DQN.load(path)
     if any(not np.array_equal(value, restored.params[key]) for key, value in best_weights.items()):
         raise RuntimeError("Checkpoint round trip changed the model weights")
@@ -178,16 +276,15 @@ def run(config, processed_dir, output, checkpoint=None):
     seeds = config["seeds"]
     if not seeds or any(type(seed) is not int or seed < 0 for seed in seeds) or len(set(seeds)) != len(seeds):
         raise ValueError("Use unique nonnegative integer seeds")
-    rates = config["target_rps"]
-    if not rates or any(not math.isfinite(rate) or rate <= 0 for rate in rates) or len(set(rates)) != len(rates):
-        raise ValueError("Use unique positive arrival rates")
+    arrival_settings(config)
+    configured_candidate_order(config)
     cohorts, estimate, provenance = load_cohorts(processed_dir, config)
     hardware = HardwareConfig(**config["hardware"])
     profile = ServiceProfile()
     decisions = config["decisions"]
     reward = RewardConfig(**config["reward"])
     # Validate optional agent parameters before creating a run directory.
-    DQN(**config.get("agent", {}))
+    probe = DQN(**config.get("agent", {}))
     metadata = dict(config=config, **provenance, features=list(FULL_FEATURE_NAMES),
                     actions=[a.value for a in ACTIONS], estimated_output_tokens=estimate,
                     service_profile=vars(profile), reward_config=vars(reward),
@@ -212,10 +309,13 @@ def run(config, processed_dir, output, checkpoint=None):
             checkpoints.append(selected)
         write_csv(output / "training.csv", history)
         write_csv(output / "checkpoints.csv", selection)
-    rows = evaluate(models, cohorts["validation"], hardware, profile, estimate, decisions, baselines=True)
+    rows = evaluate(models, cohorts["validation"], hardware, profile, estimate, decisions, baselines=True,
+                    observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config,
+                    candidate_order=configured_candidate_order(config))
     write_csv(output / "validation.csv", rows)
     write_json(output / "run.json", dict(
         **metadata, checkpoints=checkpoints, gymnasium=gymnasium.__version__, numpy=np.__version__,
+        learner_runtime=saved.get("learner_runtime") if checkpoint is not None else probe.learner_runtime,
         batch_size=BATCH_SIZE, warmup=WARMUP, replay_capacity=REPLAY_CAPACITY, update_interval=UPDATE_INTERVAL,
         train_windows=len({window for window, _, _ in cohorts["train"]}),
         validation_windows=len({window for window, _, _ in cohorts["validation"]}),

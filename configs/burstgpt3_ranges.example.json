@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "description": "Template only. Replace the SHA256 and all timestamps after reviewing the traffic report. Timestamps use source CSV seconds, not offsets from the first request.",
+  "source_sha256": "REPLACE_WITH_SOURCE_SHA256_FROM_ANALYSIS_SUMMARY",
+  "episode_seconds": 300,
+  "min_split_gap_seconds": 300,
+  "ranges": [
+    {"split": "train", "group": "training", "start_timestamp_s": 0, "end_timestamp_s": 86400},
+    {"split": "validation", "group": "validation", "start_timestamp_s": 86700, "end_timestamp_s": 108300},
+    {"split": "test", "group": "ordinary", "start_timestamp_s": 108600, "end_timestamp_s": 130200},
+    {"split": "test", "group": "peak_heavy", "start_timestamp_s": 130500, "end_timestamp_s": 152100}
+  ]
+}

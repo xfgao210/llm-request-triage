@@ -1,0 +1,124 @@
+{
+  "actions": [
+    "admit",
+    "defer",
+    "drop"
+  ],
+  "batch_size": 64,
+  "checkpoints": [
+    {
+      "episode": 24,
+      "seed": 7,
+      "sha256": "0047e7c221192ffd352d5d77ea39bac6311acbd923c670a0276cf52d2ded2fda",
+      "validation_attainment": 0.6868489583333334
+    },
+    {
+      "episode": 24,
+      "seed": 17,
+      "sha256": "d7772bc63303cfe66c364701ed59bad51c100be8c0a6f0fc2c7ecd11d68126d8",
+      "validation_attainment": 0.7254231770833334
+    },
+    {
+      "episode": 24,
+      "seed": 27,
+      "sha256": "135ed97c696e33b6b61464f10f0b7675b57b6f2ab4d1365309fd979bb0a5753e",
+      "validation_attainment": 0.7218424479166666
+    }
+  ],
+  "config": {
+    "agent": {
+      "discount_mode": "elapsed_time",
+      "gamma": 0.99,
+      "hidden": 32,
+      "learning_rate": 0.001
+    },
+    "candidate_selector": "length_aware",
+    "decisions": {
+      "defer_retry_s": 0.25,
+      "max_defers": 5
+    },
+    "episodes": 24,
+    "hardware": {
+      "gpu_name": "validation-kv-stress-4096-tokens",
+      "kv_block_size": 16,
+      "kv_total_blocks": 256,
+      "max_batch_size": 4
+    },
+    "observation": {
+      "include_episode_progress": false
+    },
+    "reward": {},
+    "seeds": [
+      7,
+      17,
+      27
+    ],
+    "slo_s": 5.0,
+    "target_rps": [
+      1.2,
+      2.4,
+      4.8
+    ],
+    "validate_every": 8
+  },
+  "estimated_output_tokens": 109.6070556640625,
+  "features": [
+    "candidate_slack_ratio",
+    "candidate_estimated_slack_ratio",
+    "candidate_estimated_service_ratio",
+    "candidate_input_tokens_log",
+    "candidate_wait_ratio",
+    "candidate_defer_ratio",
+    "candidate_fits",
+    "queue_length_log",
+    "queue_min_slack_ratio",
+    "queue_mean_slack_ratio",
+    "batch_utilization",
+    "kv_cache_utilization",
+    "prefill_utilization",
+    "decode_utilization",
+    "episode_progress"
+  ],
+  "gymnasium": "1.4.0",
+  "learner_runtime": {
+    "backend": "numpy",
+    "device": "cpu",
+    "dtype": "float64"
+  },
+  "manifest_sha256": "a90bf7724176790cb6847315e4c4b3a4db003bc9eab6a090f756990b08232977",
+  "numpy": "2.5.4",
+  "replay_capacity": 50000,
+  "reward_config": {
+    "defer_per_second": 0.02,
+    "drop": 0.2,
+    "invalid_action_penalty": 0.1,
+    "late": 1.0,
+    "success": 1.0,
+    "terminal_attainment": 1.0,
+    "terminal_completion": 0.5,
+    "terminal_drop_all": 2.0,
+    "terminal_unfinished": 0.5,
+    "wasted_service": 0.5
+  },
+  "reward_model": "llm_triage.rl.rewards.AsymmetricRewardModel",
+  "selection_split": "validation",
+  "service_profile": {
+    "contention_factor": 0.5,
+    "contention_ref_batch": 32,
+    "decode_context_s": 4.057988306430102e-08,
+    "decode_rate": 35.849389110100596,
+    "default_estimated_output_tokens": 144.0,
+    "prefill_overhead_s": 0.025490567869413613,
+    "prefill_quadratic_s": 3.183762086121867e-08,
+    "prefill_rate": null,
+    "provenance": "measured RTX 5070 / Qwen2.5-0.5B batch=1 + assumed batch contention"
+  },
+  "source_sha256": "46fc9480ef0b748ecb2b51d512ff08c196b031782cbe6f78e28044d768e86d5a",
+  "test_evaluated": false,
+  "trace_sha256": "d76a69b0fe6f21b6d9f975631d78a85c03cf2244554252605f11a6d6dc25e44c",
+  "train_windows": 32,
+  "update_interval": 4,
+  "validation_runs": 144,
+  "validation_windows": 8,
+  "warmup": 256
+}

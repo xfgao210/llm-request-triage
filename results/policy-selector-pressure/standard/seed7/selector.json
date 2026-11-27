@@ -1,0 +1,31 @@
+{
+  "baseline": "length_order_admit_only",
+  "burst_config": {
+    "enter_ratio": 2.0,
+    "exit_ratio": 1.2,
+    "min_dwell_s": 2.0,
+    "min_recent_arrivals": 3,
+    "min_reference_rps": 1.0,
+    "recent_window_s": 1.0,
+    "reference_window_s": 10.0
+  },
+  "checkpoint_sha256": "389691509804d224befc0719b92913bbbedc91f316c4eda376a20de0b5bae68a",
+  "drop_denominator": 20,
+  "enter_probability": 0.7,
+  "exit_probability": 0.4,
+  "features": [
+    "recent_rps",
+    "reference_rps",
+    "burst_ratio",
+    "eligible_queue_length",
+    "oldest_eligible_wait_s",
+    "candidate_slack_s",
+    "batch_utilization",
+    "kv_utilization"
+  ],
+  "root": {
+    "probability": 0.0,
+    "samples": 260
+  },
+  "schema_version": 1
+}

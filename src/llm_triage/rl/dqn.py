@@ -1,4 +1,4 @@
-"""NumPy Double-DQN adapted from the original Hengyi prototype."""
+"""Double-DQN with NumPy inference and optional CUDA minibatch learning."""
 
 import json
 
@@ -9,16 +9,23 @@ from .observation import FULL_FEATURE_NAMES as FEATURES
 
 
 class DQN:
-    def __init__(self, seed=0, hidden=32, learning_rate=0.001, gamma=0.99):
+    def __init__(self, seed=0, hidden=32, learning_rate=0.001, gamma=0.99, device="cpu",
+                 discount_mode="decision", discount_time_unit_s=1.0):
         if isinstance(hidden, bool) or not isinstance(hidden, int) or hidden < 1:
             raise ValueError("hidden must be a positive integer")
         if not np.isfinite(learning_rate) or learning_rate <= 0:
             raise ValueError("learning_rate must be finite and positive")
         if not np.isfinite(gamma) or not 0 <= gamma <= 1:
             raise ValueError("gamma must lie in [0, 1]")
+        if discount_mode not in ("decision", "elapsed_time"):
+            raise ValueError("discount_mode must be decision or elapsed_time")
+        if isinstance(discount_time_unit_s, bool) or not np.isfinite(discount_time_unit_s) or discount_time_unit_s <= 0:
+            raise ValueError("discount_time_unit_s must be positive and finite")
         self.rng = np.random.default_rng(seed)
         self.learning_rate = learning_rate
         self.gamma = gamma
+        self.discount_mode = discount_mode
+        self.discount_time_unit_s = discount_time_unit_s
         self.params = {
             "w1": self.rng.normal(0, np.sqrt(2 / len(FEATURES)), (len(FEATURES), hidden)),
             "b1": np.zeros(hidden),
@@ -29,6 +36,18 @@ class DQN:
         self.m = {key: np.zeros_like(value) for key, value in self.params.items()}
         self.v = {key: np.zeros_like(value) for key, value in self.params.items()}
         self.updates = 0
+        from .devices import resolve_device
+        self.device = resolve_device(device)
+        self._accelerator = None
+
+    @property
+    def learner_runtime(self):
+        runtime = dict(device=self.device, backend="numpy", dtype="float64")
+        if self.device == "cuda":
+            import torch
+            runtime.update(backend="torch", torch=torch.__version__,
+                           gpu=torch.cuda.get_device_name())
+        return runtime
 
     def copy_weights(self):
         return {key: value.copy() for key, value in self.params.items()}
@@ -46,14 +65,47 @@ class DQN:
             return int(self.rng.choice(allowed))
         return int(allowed[np.argmax(self.forward(state)[allowed])])
 
+    def bootstrap_discounts(self, elapsed_s):
+        """Discount future value by decision or simulated elapsed time.
+
+        Observed step rewards are unchanged; this is time-aware bootstrapping,
+        not within-step discounting of individual completion events.
+        """
+        elapsed_s = np.asarray(elapsed_s, dtype=np.float64)
+        if not np.isfinite(elapsed_s).all() or (elapsed_s < 0).any():
+            raise ValueError("Transition durations must be finite and nonnegative")
+        if self.discount_mode == "decision":
+            return np.full_like(elapsed_s, self.gamma)
+        return np.power(self.gamma, elapsed_s / self.discount_time_unit_s)
+
+    def unpack_batch(self, batch):
+        if len(batch) not in (6, 7):
+            raise ValueError("Expected six transition arrays plus optional elapsed seconds")
+        if self.discount_mode == "elapsed_time" and len(batch) != 7:
+            raise ValueError("Elapsed-time discounting requires recorded transition durations")
+        states, actions, rewards, next_states, done, masks = batch[:6]
+        durations = batch[6] if len(batch) == 7 else np.zeros_like(rewards)
+        if np.shape(durations) != np.shape(rewards):
+            raise ValueError("Transition durations must match reward shape")
+        return states, actions, rewards, next_states, done, masks, self.bootstrap_discounts(durations)
+
     def train_batch(self, batch):
-        states, actions, rewards, next_states, done, next_masks = batch
+        if self.device == "cuda":
+            from .devices import TensorLearner
+            if self._accelerator is None:
+                self._accelerator = TensorLearner(self, self.device)
+            loss = self._accelerator.train_batch(self, batch)
+            self.updates += 1
+            if self.updates % 200 == 0:
+                self.target = self.copy_weights()
+            return loss
+        states, actions, rewards, next_states, done, next_masks, discounts = self.unpack_batch(batch)
         # Only nonterminal transitions bootstrap. Their masks constrain selection.
         live = ~done
         targets = rewards.copy()
         online = self.forward(next_states[live])
         next_actions = np.argmax(np.where(next_masks[live], online, -np.inf), axis=1)
-        targets[live] += self.gamma * self.forward(next_states[live], self.target)[
+        targets[live] += discounts[live] * self.forward(next_states[live], self.target)[
             np.arange(len(next_actions)), next_actions
         ]
         hidden = np.maximum(0, states @ self.params["w1"] + self.params["b1"])
@@ -85,15 +137,21 @@ class DQN:
         return float(loss)
 
     def save(self, path, metadata):
-        np.savez(path, **self.params, metadata=json.dumps(metadata, sort_keys=True))
+        saved = dict(metadata, learner_config=dict(
+            learning_rate=self.learning_rate, gamma=self.gamma,
+            discount_mode=self.discount_mode, discount_time_unit_s=self.discount_time_unit_s,
+        ))
+        np.savez(path, **self.params, metadata=json.dumps(saved, sort_keys=True))
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path, *, device="cpu"):
         with np.load(path, allow_pickle=False) as data:
             metadata = json.loads(data["metadata"].item())
             if metadata["features"] != list(FEATURES) or metadata["actions"] != [a.value for a in ACTIONS]:
                 raise ValueError("Checkpoint observation or action schema does not match")
-            model = cls(hidden=data["b1"].size)
+            agent = metadata.get("learner_config", metadata.get("config", {}).get("agent", {}))
+            model = cls(hidden=data["b1"].size, device=device,
+                        **{k: agent[k] for k in ("learning_rate", "gamma", "discount_mode", "discount_time_unit_s") if k in agent})
             for key, expected in model.params.items():
                 value = data[key]
                 if value.shape != expected.shape or not np.isfinite(value).all():
@@ -104,25 +162,34 @@ class DQN:
 
 
 class ReplayBuffer:
-    def __init__(self, capacity, seed):
+    def __init__(self, capacity, seed, *, include_elapsed_time=False):
         self.capacity = capacity
         self.cursor = self.size = 0
         self.rng = np.random.default_rng(seed)
+        self.include_elapsed_time = include_elapsed_time
         self.states = np.zeros((capacity, len(FEATURES)), dtype=np.float32)
         self.next_states = np.zeros_like(self.states)
         self.actions = np.zeros(capacity, dtype=np.int64)
         self.rewards = np.zeros(capacity)
         self.done = np.zeros(capacity, dtype=bool)
         self.masks = np.zeros((capacity, len(ACTIONS)), dtype=bool)
+        self.elapsed_s = np.zeros(capacity, dtype=np.float64)
 
-    def add(self, state, action, reward, next_state, done, next_mask):
+    def add(self, state, action, reward, next_state, done, next_mask, *, elapsed_s=None):
+        if self.include_elapsed_time and elapsed_s is None:
+            raise ValueError("Record elapsed_s for every time-discounted transition")
+        duration = 0.0 if elapsed_s is None else elapsed_s
+        if not np.isfinite(duration) or duration < 0:
+            raise ValueError("elapsed_s must be finite and nonnegative")
         index = self.cursor
         self.states[index], self.actions[index], self.rewards[index] = state, action, reward
         self.next_states[index], self.done[index], self.masks[index] = next_state, done, next_mask
+        self.elapsed_s[index] = duration
         self.cursor = (index + 1) % self.capacity
         self.size = min(self.size + 1, self.capacity)
 
     def sample(self, size):
         ids = self.rng.choice(self.size, size=size, replace=False)
-        return (self.states[ids], self.actions[ids], self.rewards[ids],
-                self.next_states[ids], self.done[ids], self.masks[ids])
+        batch = (self.states[ids], self.actions[ids], self.rewards[ids],
+                 self.next_states[ids], self.done[ids], self.masks[ids])
+        return batch + (self.elapsed_s[ids],) if self.include_elapsed_time else batch

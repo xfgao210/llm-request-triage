@@ -16,7 +16,7 @@ import gymnasium
 import numpy as np
 
 from experiments.train_dqn import (
-    evaluate, load_cohorts, run as train, write_csv, write_json,
+    configured_candidate_order, evaluate, load_cohorts, run as train, write_csv, write_json,
 )
 from llm_triage.rl.dqn import DQN
 from llm_triage.simulation import HardwareConfig, ServiceProfile
@@ -100,6 +100,8 @@ def run_locked(config, data_dir, output, *, source=None, resume=False):
     config_id = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
     fingerprint = training_fingerprint()
     runtime = dict(python=platform.python_version(), numpy=np.__version__, gymnasium=gymnasium.__version__)
+    if "device" in config.get("agent", {}):
+        runtime["learner"] = DQN(**config["agent"]).learner_runtime
     state_path = output / "pipeline.json"
     if resume:
         state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -115,12 +117,25 @@ def run_locked(config, data_dir, output, *, source=None, resume=False):
         state.update(status="running", stage="prepare")
         atomic_state(state_path, state)
         processed = data_dir / "processed"
-        if source is not None or not (processed / "manifest.json").exists():
+        dataset = config.get("dataset", "burstgpt1")
+        if dataset not in {"burstgpt1", "burstgpt3"}:
+            raise ValueError("Unknown dataset")
+        if dataset == "burstgpt3":
+            if source is not None or not (processed / "manifest.json").exists():
+                raise ValueError("Prepare BurstGPT 3 first with scripts/prepare_burstgpt3.py; omit --source here")
+            manifest = json.loads((processed / "manifest.json").read_text(encoding="utf-8"))
+            if manifest.get("dataset") != "burstgpt3":
+                raise ValueError("Expected prepared BurstGPT 3 scenarios in --data-dir")
+        elif source is not None or not (processed / "manifest.json").exists():
             raw = data_dir / "raw"
             raw.mkdir(parents=True, exist_ok=True)
             with run_lock(raw):
                 if source is not None or not (processed / "manifest.json").exists():
                     prepare(data_dir=data_dir, source=source)
+        else:
+            manifest = json.loads((processed / "manifest.json").read_text(encoding="utf-8"))
+            if manifest.get("dataset") == "burstgpt3":
+                raise ValueError("Use a config with dataset=burstgpt3 for these scenarios")
         cohorts, estimate, provenance = load_cohorts(processed, config)
         if "data" in state and state["data"] != provenance:
             raise ValueError("Prepared data changed since the previous attempt")
@@ -152,7 +167,9 @@ def run_locked(config, data_dir, output, *, source=None, resume=False):
         models = checkpoint_models(training_dir, config, provenance)
         hardware = HardwareConfig(**config["hardware"])
         rows = evaluate(models, cohorts["validation"], hardware, ServiceProfile(),
-                        estimate, config["decisions"], baselines=True)
+                        estimate, config["decisions"], baselines=True,
+                        observation=config.get("observation"), multiplier_mode="arrival_multipliers" in config,
+                        candidate_order=configured_candidate_order(config))
         write_csv(output / "validation.csv", rows)
         # Every row should match the evaluation recorded by the training entry point.
         if (output / "validation.csv").read_bytes() != (training_dir / "validation.csv").read_bytes():

@@ -53,6 +53,7 @@ def run_suite(config, processed_dir, output_dir, summary_dir):
         raise ValueError("Prepared windows differ from manifest")
     estimate = manifest["estimated_output_tokens_train_mean"]
     windows = [(key, rows) for key, rows in sorted(load_windows(window_path).items()) if key[0] == config["split"]]
+    layout = {(item["split"], item["window"]): item for item in manifest.get("windows", [])}
     if not windows:
         raise ValueError("No windows in selected split")
     hardware = HardwareConfig(**config["hardware"])
@@ -61,7 +62,10 @@ def run_suite(config, processed_dir, output_dir, summary_dir):
     all_requests = [r for _, rows in windows for r in rows]
     for (split, index), rows in windows:
         for rate in rates:
-            replay = replay_window(rows, slo_s=config["slo_s"], target_rps=rate)
+            item = layout.get((split, index), {})
+            bounds = ((item["start_timestamp_s"], item["end_timestamp_s"])
+                      if manifest.get("windowing") == "fixed_duration" else None)
+            replay = replay_window(rows, slo_s=config["slo_s"], target_rps=rate, bounds=bounds)
             executor = SimulatorExecutor(
                 replay.requests, hardware, profile,
                 estimated_output_tokens=estimate,

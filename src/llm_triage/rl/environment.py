@@ -346,6 +346,7 @@ class TriageEnv(_GymEnvBase):
         estimated_output_tokens: Optional[float] = None,
         service_estimator: Optional[Callable[[int, float], float]] = None,
         candidate_selector: Optional[CandidateSelectorSpec] = None,
+        progress_callback: Optional[Callable[[TriageKernel], None]] = None,
         queue_order: Optional[CandidateSelectorSpec] = None,
         observation_preset: ObservationPreset = "full",
         observation_config: Optional[ObservationConfig] = None,
@@ -407,6 +408,7 @@ class TriageEnv(_GymEnvBase):
             service_estimator=self.service_estimator,
             priority_fn=self._priority_fn,
             record_iterations=True,
+            progress_callback=progress_callback,
         )
 
         self._rng = random.Random(seed)
