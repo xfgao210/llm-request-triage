@@ -182,6 +182,7 @@ class TriageKernel:
         service_estimator: Optional[Callable[[ int, float], float]] = None,
         priority_fn: Optional[Callable[[RequestView], object]] = None,
         record_iterations: bool = True,
+        progress_callback: Optional[Callable[["TriageKernel"], None]] = None,
     ) -> None:
         self.hw = hardware or HardwareConfig()
         self.profile = profile or ServiceProfile()
@@ -202,6 +203,7 @@ class TriageKernel:
         self._service_estimator = service_estimator
         self._priority_fn = priority_fn
         self.record_iterations = bool(record_iterations)
+        self._progress_callback = progress_callback
 
         # Initialized in reset()
         self.requests: List[Request] = []
@@ -604,6 +606,10 @@ class TriageKernel:
         while True:
             self._absorb_arrivals()
             self._prune_infeasible_and_expired()
+            # Observational hook, also reached during long decode/drain phases.
+            # It must not mutate kernel state or supply information to policies.
+            if self._progress_callback is not None:
+                self._progress_callback(self)
 
             if not self._should_interleave_decode():
                 self._resume_preempted()
@@ -819,6 +825,7 @@ def simulate(
     estimated_output_tokens: Optional[float] = None,
     service_estimator: Optional[Callable[[int, float], float]] = None,
     record_iterations: bool = True,
+    progress_callback: Optional[Callable[[TriageKernel], None]] = None,
 ) -> SimResult:
     """Run one simulation episode to completion.
 
@@ -853,6 +860,9 @@ def simulate(
         for policy-visible service time estimation.
     record_iterations:
         Keep a per-iteration trace in ``SimResult.iterations``.
+    progress_callback:
+        Optional diagnostic observer called between simulator iterations. Never
+        used for policy decisions; must not modify state.
     """
     priority_fn = getattr(callback, "priority", None)
     kernel = TriageKernel(
@@ -865,6 +875,7 @@ def simulate(
         service_estimator=service_estimator,
         priority_fn=priority_fn,
         record_iterations=record_iterations,
+        progress_callback=progress_callback,
     )
     kernel.reset(workload)
     while not kernel.is_terminal():

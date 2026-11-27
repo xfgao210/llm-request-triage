@@ -131,7 +131,7 @@ def _percentile(values, fraction):
     return ordered[lower] + (ordered[math.ceil(position)] - ordered[lower]) * (position - lower)
 
 
-def diagnose_replay(result, replay, slo_s, timeline_bin_s, ttft_target_s=None):
+def diagnose_replay(result, replay, slo_s, timeline_bin_s, ttft_target_s=None, *, return_records=False):
     evaluation = evaluate_events(result.events, measurement_window_s=replay.horizon_s)
     records = evaluation.request_records
     requests = result.by_id()
@@ -211,7 +211,8 @@ def diagnose_replay(result, replay, slo_s, timeline_bin_s, ttft_target_s=None):
         extra.update(ttft_target_s=ttft_target_s,
                      ttft_target_met=sum(d["ttft_s"] is not None and d["ttft_s"] <= ttft_target_s for d in diagnostics),
                      ttft_target_attainment=sum(d["ttft_s"] is not None and d["ttft_s"] <= ttft_target_s for d in diagnostics) / n)
-    return dict(evaluation.summary, **extra), diagnostics, timeline
+    values = (dict(evaluation.summary, **extra), diagnostics, timeline)
+    return (*values, records) if return_records else values
 
 
 def run_sweep(data_dir, destination, windows, *, multipliers=(1, 2, 4, 8), slo_s=5.0,

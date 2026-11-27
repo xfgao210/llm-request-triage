@@ -24,7 +24,8 @@ def test_online_notebook_trains_before_adapting_without_archive_input():
     assert "TRAINING_ARCHIVE" not in "\n".join(online.values())
     assert "archive_path" not in online["export"]
     assert "EVAL_WINDOW_SECONDS = 900" in online["parameters"]
-    assert "EVAL_ARRIVAL_MULTIPLIERS = [1, 4, 8]" in online["parameters"]
+    assert "EVAL_ARRIVAL_MULTIPLIERS = [8]" in online["parameters"]
+    assert "WINDOWS_PER_GROUP = 5" in online["parameters"]
     assert 'DEVICE = "auto"' in online["parameters"]
     assert "device=DEVICE" in online["run"]
     assert 'observation={"include_episode_progress": False}' in online["train"]
@@ -34,7 +35,7 @@ def test_online_notebook_trains_before_adapting_without_archive_input():
         assert text in online["export"]
 
 
-def test_combined_notebook_code_cells_compile_without_saved_outputs():
+def test_combined_notebook_code_cells_compile():
     path = ROOT / "notebooks/colab_burstgpt3_online_adaptation.ipynb"
     notebook = json.loads(path.read_text())
     for cell in notebook["cells"]:

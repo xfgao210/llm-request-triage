@@ -4,8 +4,8 @@ The current `notebooks/colab_burstgpt3_online_adaptation.ipynb` starts from the
 raw BurstGPT 3 CSV, trains new checkpoints, and runs a short five-policy stress
 comparison. No old results ZIP or checkpoint upload is needed. Use a new run
 name; old notebook folders and clock-enabled checkpoints are not compatible.
-The default quick mode runs the unchanged 8× peak condition only; full mode
-enables all configured conditions. Neither mode samples requests.
+The current defaults run five windows per group at 8× in full mode. Quick mode
+runs the original 8× peak burst condition only. Neither mode samples requests.
 
 ## Current notebook workflow
 
@@ -348,3 +348,99 @@ episode, epsilon and episode-local simulated time; they are included in the
 export ZIP. The loss plot uses learner updates and a 50-update moving average.
 The validation setting increases evaluation overhead but does not change the
 training episode budget. Older run folders lack these logs; use a new run.
+
+## Multi-window exploratory evaluation
+
+The notebook defaults to `RUN_MODE="full"`, `WINDOWS_PER_GROUP=5`,
+`MIN_REQUESTS_PER_EVAL_WINDOW=100`, and `EVAL_ARRIVAL_MULTIPLIERS=[8]`.
+This means 10 whole source windows, 50 policy cases for one seed, not a full
+replay of both multi-day ranges. Windows are 900 source seconds (112.5 simulated
+seconds at 8x). Every condition starts empty with the same selected checkpoint
+and independent online optimizer/buffer/update budget. No state carries between
+windows. The conservative 100-update cap remains per condition.
+
+Selection uses non-overlapping blocks aligned to each explicit range start.
+The original group method is selected first (typical for mixed, burst for peak),
+then remaining roles from burst, typical, token_heavy, low_count and high_count.
+Typical targets the median nonempty count; other roles select the best remaining
+block, with earliest timestamp breaking ties. Thus token_heavy/high_count are
+not necessarily global maxima when an earlier role already selected that block.
+All chosen blocks must meet the explicit minimum request count; requests within
+them are not filtered or sampled. Too few eligible blocks raises an error.
+`WINDOWS_PER_GROUP=1` and minimum=1 restore the old single-window rules.
+
+The per-window comparison table/CSV and plots preserve separate results, along
+with mean input/output tokens, native request/token rates and exact timestamps.
+Token volume is a workload descriptor, not calibrated GPU work. Recorded output
+lengths are used only for offline selection/descriptors, never supplied to RL.
+Selection uses no policy outcomes. These deliberately selected windows are not
+a random/representative sample or a new untouched holdout. Reserve new windows
+and seeds before final evaluation.
+
+To reuse the previously selected model locally, set `REUSE_TRAINING_RUN` to the
+completed run's `training_run` folder, e.g.
+`results/runs/colab_burstgpt3_stress/length_aware_drop02_full/training_run`.
+Leave all training settings identical, including validation frequency and seed.
+The source run must retain its prepared data and traffic-analysis folders.
+The notebook reads those shared inputs and copies checked training artifacts
+into the new run without modifying the source. Changed configs/checkpoint hashes
+are rejected. Reuse provenance is saved in `training_reuse.json`; the exported
+ZIP still includes the checkpoint, training diagnostics and prepared manifest,
+not the raw/prepared CSV. Leave this setting blank to train fresh as before.
+
+## Continuous first test: runtime pilot and optional full range
+
+Use `notebooks/colab_burstgpt3_continuous_first_test.ipynb` for a runtime pilot
+inside the earliest explicit test range. The default is a continuous source hour
+from the first nonempty prepared bin: `[21206730, 21210330)`, 471 requests.
+The leading 16.58 source hours have no recorded requests. Pilot selection is
+traffic-only and retains every request inside its declared interval. It is a
+temporal subset, not evaluation of the complete test range. This notebook does
+not train. Use a new name, `continuous_mixed_8x_pilot_1h_v1`, not the interrupted
+full-range folder. `PILOT_SOURCE_MINUTES` controls duration;
+`PILOT_START_TIMESTAMP_S` optionally selects a bin-aligned start. Leaving the
+start unset chooses the first nonempty bin. Setting duration to `None` and start
+to `None` explicitly selects the full `[21147030, 22155630)` range with 1,153,470
+requests; the unoptimized full run proved impractical on this laptop.
+`SOURCE_RUN` points to the previous completed run folder containing
+`data/processed` and `training_run/training`; default is `length_aware_drop02_full`.
+Prepared data and checkpoint fingerprints must match. The previous run is read
+only. Local and Colab paths are configurable; Colab requires those original run
+files on Drive, not just the compact report ZIP.
+
+Default: 8x, one seed, FCFS/length-aware/static SLO-aware/frozen RL. Queues persist
+throughout the selected interval. Optional adapting RL uses one fresh optimizer/buffer
+at range start, not per reporting bin. It uses LR=1e-5, warmup=2048, batch=64,
+32-decision update eligibility, >=32 new outcomes, >=60 simulated seconds between
+updates, and no global cap by default. This is an experimental long-run schedule,
+not the prior 100-update short-window protocol. Settings are recorded and a new
+run name is required to change them.
+
+There is no drain or reset at reporting boundaries. The existing simulator fully
+drains work once after the final arrival; no bounded-tail stop was added. Full
+tail latency is measurable, but a backlog may add considerable runtime. Goodput
+counts only on-time completions inside each reporting interval, excluding tail.
+
+5/10/15-minute **source-time** reports are calculated directly from request
+diagnostics after replay; at 8x these intervals are 37.5/75/112.5 simulated
+seconds. Arrival-cohort SLO/drop rates include dropped and unfinished requests.
+Empty rates are undefined; percentile metrics are recomputed, not averaged.
+The default chart cadence is 15 minutes. Reporting cells can be rerun without
+replaying or training. Stability statistics exclude bins with <30 arrivals by
+default and expose eligible time/request coverage. The 80% attainment analysis
+target is not a change to the five-second request deadline or the reward.
+
+Progress prints roughly every `PROGRESS_EVERY_SECONDS=30` wall seconds between
+simulator steps, including decode/drain phases. It reports absolute/source-elapsed
+time, observed arrivals, resolved requests, queue size and wall time. It is an
+observational hook, not input to the policy. A replay-complete message separates
+simulation from report generation. An individual expensive step may delay a
+progress message, so this is not a separate heartbeat thread.
+
+Set `CONFIRM_REPLAY=True` only after reviewing the preflight. Complete
+policy cases resume via checked caches; interrupted individual cases restart
+from their beginning. Large per-decision CSVs are disabled (header only), but
+per-request diagnostics and in-memory simulator events/iterations remain large.
+No memory/runtime guarantee is made. The default HTML/report ZIP omits the large
+request CSVs; retain the run folder for rebinning. It is not a complete resumable
+simulation archive. This remains exploratory reused test data, not a new holdout.

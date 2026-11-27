@@ -17,6 +17,7 @@ from experiments.baseline_capacity_sweep import (
 from experiments.online_adaptation import replay_dqn
 from experiments.run_pipeline import run_lock
 from llm_triage.metrics import evaluate_events, summarize_records
+from llm_triage.metrics.time_bins import TimeBins
 from llm_triage.rl.devices import resolve_device
 from llm_triage.scheduling import baseline_schedulers
 from llm_triage.simulation import HardwareConfig, ServiceProfile, simulate
@@ -40,6 +41,8 @@ def select_run_conditions(windows, multipliers, seeds, *, mode="full", quick_see
     if mode == "full":
         return [dict(w) for w in windows], list(multipliers), list(seeds)
     peaks = [w for w in windows if w["group"] == quick_group]
+    if len(peaks) > 1:
+        peaks = [w for w in peaks if w.get("selection") == "burst"]
     if len(peaks) != 1 or 8 not in multipliers:
         raise ValueError(f"Quick mode requires exactly one {quick_group} window and an existing 8x condition")
     seed = seeds[0] if quick_seed is None else quick_seed
@@ -48,14 +51,21 @@ def select_run_conditions(windows, multipliers, seeds, *, mode="full", quick_see
     return [dict(peaks[0])], [8], [seed]
 
 
-def select_evaluation_windows(manifest, seconds=900, methods=None, *, split="test"):
+def select_evaluation_windows(manifest, seconds=900, methods=None, *, split="test", windows_per_group=1,
+                              min_requests=1):
     """Traffic-only selection, with rules declared before policy evaluation.
 
     These are reused exploratory evaluation groups, not newly untouched data.
-    Typical = median-count nonempty block; burst = highest sub-bin request rate.
+    Typical = nearest median positive count; burst = highest sub-bin request rate.
+    Extra roles use best remaining token volume / low count / high count blocks.
+    Tokens are retrospective workload descriptors, not features exposed to RL.
     """
     if split not in ("validation", "test"):
         raise ValueError("Evaluation split must be validation or test")
+    if type(windows_per_group) is not int or not 1 <= windows_per_group <= 5:
+        raise ValueError("windows_per_group must be an integer from 1 to 5")
+    if type(min_requests) is not int or min_requests < 1:
+        raise ValueError("min_requests must be a positive integer")
     methods = methods or ({"validation": "burst"} if split == "validation" else
                           {"mixed_traffic": "typical", "peak_heavy": "burst"})
     bin_s = manifest["range_config"]["episode_seconds"]
@@ -79,16 +89,70 @@ def select_evaluation_windows(manifest, seconds=900, methods=None, *, split="tes
                 raise ValueError("Manifest does not cover complete evaluation blocks")
             count = sum(b["requests"] for b in selected)
             if count:
+                input_tokens = sum(b["input_tokens"] for b in selected)
+                output_tokens = sum(b["output_tokens"] for b in selected)
                 candidates.append(dict(name=group, group=group, split=split, start_timestamp_s=start,
                                        end_timestamp_s=start+seconds, requests=count, selection=method,
+                                       input_tokens=input_tokens, output_tokens=output_tokens,
+                                       mean_input_tokens=input_tokens/count, mean_output_tokens=output_tokens/count,
+                                       native_mean_rps=count/seconds,
+                                       native_token_rps=(input_tokens+output_tokens)/seconds,
                                        peak_subbin_rps=max(b["requests"] / (b["end_timestamp_s"]-b["start_timestamp_s"])
                                                            for b in selected)))
         if not candidates:
             raise ValueError(f"No nonempty complete blocks in {group}; shorten evaluation windows")
         median = statistics.median(c["requests"] for c in candidates)
-        chosen.append(max(candidates, key=lambda c: (c["peak_subbin_rps"], c["requests"], -c["start_timestamp_s"]))
-                      if method == "burst" else min(candidates, key=lambda c: (abs(c["requests"]-median), c["start_timestamp_s"])))
+        candidates = [c for c in candidates if c["requests"] >= min_requests]
+        if len(candidates) < windows_per_group:
+            raise ValueError(f"Need {windows_per_group} complete blocks with >= {min_requests} requests in {group}")
+        roles = [method] + [r for r in ("burst", "typical", "token_heavy", "low_count", "high_count") if r != method]
+        remaining = list(candidates)
+        for role in roles[:windows_per_group]:
+            if role == "typical":
+                block = min(remaining, key=lambda c: (abs(c["requests"]-median), c["start_timestamp_s"]))
+            else:
+                score = {"burst": lambda c: (c["peak_subbin_rps"], c["requests"]),
+                         "token_heavy": lambda c: (c["native_token_rps"], c["requests"]),
+                         "low_count": lambda c: (-c["requests"],),
+                         "high_count": lambda c: (c["requests"],)}[role]
+                block = max(remaining, key=lambda c: (*score(c), -c["start_timestamp_s"]))
+            remaining.remove(block)
+            chosen.append(dict(block, selection=role,
+                               name=group if windows_per_group == 1 else f"{group}_{role}"))
     return sorted(chosen, key=lambda w: w["start_timestamp_s"])
+
+
+def reuse_training_run(source, destination, config):
+    """Copy a completed, matching training run without modifying the source."""
+    import shutil
+    source, destination = Path(source).resolve(), Path(destination).resolve()
+    state = json.loads((source / "pipeline.json").read_text())
+    record = json.loads((source / "training/run.json").read_text())
+    if state["status"] != "completed" or record["config"] != config:
+        raise ValueError("Reuse requires completed training with exactly matching configuration")
+    paths = [Path(p) for p in ("pipeline.json", "validation.csv", "training/run.json",
+                              "training/training.csv", "training/checkpoints.csv", "training/validation.csv")]
+    paths += [p.relative_to(source) for p in sorted((source / "training").glob("training_updates_seed*.csv"))]
+    for checkpoint in record["checkpoints"]:
+        seed = checkpoint["seed"]
+        if type(seed) is not int or seed < 0:
+            raise ValueError("Invalid checkpoint seed")
+        path = Path(f"training/dqn_seed{seed}.npz")
+        if sha256(source / path) != checkpoint["sha256"]:
+            raise ValueError("Source checkpoint checksum differs")
+        paths.append(path)
+    # Validate every target before writing, permitting identical resumptions only.
+    for path in paths:
+        if not (source / path).is_file():
+            raise ValueError(f"Missing training artifact: {path}")
+        if (destination / path).exists() and sha256(destination / path) != sha256(source / path):
+            raise ValueError("Destination training differs; use a new RUN_NAME")
+    for path in paths:
+        target = destination / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.exists():
+            shutil.copy2(source / path, target)
+    return dict(source=str(source), files={str(p): sha256(source / p) for p in paths})
 
 
 def validate_evaluation_windows(manifest, windows, *, split="test"):
@@ -126,7 +190,8 @@ def run(training_dir, data_dir, output, windows, *, multipliers=(1, 4, 8), seeds
         ttft_target_s=1.0, timeline_source_bin_s=60.0, max_requests=30000,
         epsilon=0.0, learning_rate=.0001, batch_size=64, warmup=256,
         update_interval=4, capacity=50000, device="auto", min_update_seconds=0.0,
-        min_new_outcomes=0, max_updates=None, evaluation_split="test"):
+        min_new_outcomes=0, max_updates=None, evaluation_split="test", policies=None, log_transitions=True,
+        progress_interval_s=None):
     """Every window/load/seed is independent; each policy cache is resumable.
 
     Baselines are seed-independent and run once per window/load. Each DQN copy
@@ -141,11 +206,21 @@ def run(training_dir, data_dir, output, windows, *, multipliers=(1, 4, 8), seeds
                     max_requests=max_requests, epsilon=epsilon, learning_rate=learning_rate,
                     batch_size=batch_size, warmup=warmup, update_interval=update_interval,
                     capacity=capacity, device=device, min_update_seconds=min_update_seconds,
-                    min_new_outcomes=min_new_outcomes, max_updates=max_updates, evaluation_split=evaluation_split)
+                    min_new_outcomes=min_new_outcomes, max_updates=max_updates, evaluation_split=evaluation_split,
+                    policies=list(POLICIES if policies is None else policies), log_transitions=log_transitions,
+                    progress_interval_s=progress_interval_s)
 
 
 def _run(training_dir, data_dir, output, windows, **settings):
     from llm_triage.rl.update_schedule import OnlineUpdateSchedule
+    if (not settings["policies"] or len(set(settings["policies"])) != len(settings["policies"])
+            or not set(settings["policies"]) <= set(POLICIES)):
+        raise ValueError("Select distinct supported policies")
+    if type(settings["log_transitions"]) is not bool:
+        raise ValueError("log_transitions must be boolean")
+    interval = settings["progress_interval_s"]
+    if interval is not None and (isinstance(interval, bool) or not math.isfinite(interval) or interval <= 0):
+        raise ValueError("progress_interval_s must be positive and finite, or None")
     OnlineUpdateSchedule(settings["update_interval"], settings["min_update_seconds"],
                          settings["min_new_outcomes"], settings["max_updates"])
     for key in ("batch_size", "warmup", "update_interval", "capacity", "max_requests"):
@@ -199,7 +274,8 @@ def _run(training_dir, data_dir, output, windows, **settings):
     root = Path(__file__).resolve().parents[1]
     paths = [*sorted((root / "src/llm_triage").rglob("*.py")),
              *(root / "experiments" / name for name in ("adaptation_stress.py", "online_adaptation.py",
-                                                        "baseline_capacity_sweep.py", "train_dqn.py", "run_pipeline.py"))]
+                                                        "baseline_capacity_sweep.py", "train_dqn.py", "run_pipeline.py",
+                                                        "replay_progress.py"))]
     identity = dict(protocol="independent_load_stress_v2", settings=settings, windows=windows,
                     training_record_sha256=sha256(record_path), checkpoints=checkpoints,
                     runtime=runtime,
@@ -221,7 +297,7 @@ def _run(training_dir, data_dir, output, windows, **settings):
         for multiplier in levels:
             replay = replay_window(rows, slo_s=config["slo_s"], target_rps=len(rows)/span*multiplier,
                                    bounds=(window["start_timestamp_s"], window["end_timestamp_s"]))
-            for policy in POLICIES:
+            for policy in settings["policies"]:
                 for seed in (seeds if policy in ("frozen", "adapting") else [None]):
                     name = policy if seed is None else f"{policy}_seed{seed}"
                     label = dict(group=window["group"], window=window["name"], multiplier=multiplier,
@@ -240,9 +316,14 @@ def _run(training_dir, data_dir, output, windows, **settings):
                         print("Running:", window["name"], multiplier, name, len(rows), "requests", flush=True)
                         write_json(marker, dict(status="running", identity_sha256=digest))
                         began = time.monotonic()
+                        progress = None
+                        if interval is not None:
+                            from experiments.replay_progress import ReplayProgress
+                            progress = ReplayProgress(f"{window['name']}/{name}", replay, interval)
                         if seed is None:
                             simulation = simulate(replay.requests, baseline_schedulers()[policy], hardware, profile,
                                                   estimated_output_tokens=record["estimated_output_tokens"],
+                                                  progress_callback=progress,
                                                   **config["decisions"])
                             stats = dict(decisions=None, updates=0, max_weight_change=0.0)
                         else:
@@ -250,16 +331,30 @@ def _run(training_dir, data_dir, output, windows, **settings):
                                                            folder, policy, device=resolved_device,
                                                            **{k: settings[k] for k in ("epsilon", "learning_rate", "batch_size",
                                                                                       "warmup", "update_interval", "capacity",
-                                                                                      "min_update_seconds", "min_new_outcomes", "max_updates")}, seed=seed)
-                        metrics, diagnostics, timeline = diagnose_replay(
+                                                                                      "min_update_seconds", "min_new_outcomes", "max_updates",
+                                                                                      "log_transitions")}, seed=seed,
+                                                           progress_callback=progress)
+                        print(f"Replay finished: {name}; resolved={len(simulation.requests)}/{len(rows)}; "
+                              f"queue=0; simulated={simulation.total_time:.1f}s; "
+                              f"wall={time.monotonic()-began:.1f}s; building reports", flush=True)
+                        metrics, diagnostics, timeline, records = diagnose_replay(
                             simulation, replay, config["slo_s"], settings["timeline_source_bin_s"] / multiplier,
-                            settings["ttft_target_s"])
-                        records = evaluate_events(simulation.events, measurement_window_s=replay.horizon_s).request_records
+                            settings["ttft_target_s"], return_records=True)
                         if {r.request_id for r in records} != {str(row.source_row) for row in rows}:
                             raise RuntimeError("Unpaired cohort")
-                        for entry in timeline:
+                        # Index arrivals once, rather than rescanning a multi-day
+                        # cohort for every reporting bin. This does not reset state.
+                        bin_clock = TimeBins([entry["sim_start_s"] for entry in timeline] +
+                                             [timeline[-1]["sim_end_s"]])
+                        records_by_bin = {}
+                        for record_row in records:
+                            index = bin_clock.index(record_row.arrival_time_s)
+                            if index is None:
+                                raise RuntimeError("Arrival outside the reporting window")
+                            records_by_bin.setdefault(index, []).append(record_row)
+                        for index, entry in enumerate(timeline):
                             a, b = entry["sim_start_s"], entry["sim_end_s"]
-                            cohort = [r for r in records if a <= r.arrival_time_s < b]
+                            cohort = records_by_bin.get(index, [])
                             entry.update(summarize_records(cohort, measurement_window_s=b-a, window_start_s=a))
                             entry.update(_ttft_score(cohort, settings["ttft_target_s"]))
                         by_id = {r.request_id: r for r in records}
@@ -280,6 +375,7 @@ def _run(training_dir, data_dir, output, windows, **settings):
                         files = [p for p in folder.iterdir() if p.is_file() and p.name != "case.json" and not p.name.endswith(".tmp")]
                         write_json(marker, dict(status="completed", identity_sha256=digest,
                                                 files={p.name: sha256(p) for p in files}))
+                        del simulation, records, by_id, records_by_bin, diagnostics, timeline, grouped
                     summaries.append(json.loads((folder / "summary.json").read_text()))
                     learning.append(json.loads((folder / "learning.json").read_text()))
                     timelines.extend(json.loads((folder / "timeline.json").read_text()))

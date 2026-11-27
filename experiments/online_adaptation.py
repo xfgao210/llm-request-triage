@@ -29,7 +29,7 @@ from llm_triage.workload.transforms import replay_window
 def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.0,
                learning_rate=.0001, batch_size=64, warmup=256, update_interval=4,
                capacity=50000, device="cpu", min_update_seconds=0.0,
-               min_new_outcomes=0, max_updates=None):
+               min_new_outcomes=0, max_updates=None, log_transitions=True, progress_callback=None):
     """One causal replay, shared by the legacy and resumable stress workflows.
 
     An interrupted replay restarts from the source checkpoint. We never resume
@@ -55,14 +55,17 @@ def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.
     model.gamma = config.get("agent", {}).get("gamma", .99)
     buffer = (ReplayBuffer(capacity, seed + 1000, include_elapsed_time=model.discount_mode == "elapsed_time")
               if policy == "adapting" else None)
-    env = TriageEnv(replay, HardwareConfig(**config["hardware"]),
+    # Avoid constructor auto-reset followed by a second explicit reset; on a
+    # million-request range that would duplicate initial preparation work.
+    env = TriageEnv(None, HardwareConfig(**config["hardware"]),
                     ServiceProfile(**record["service_profile"]),
+                    progress_callback=progress_callback,
                     estimated_output_tokens=record["estimated_output_tokens"],
                     reward_config=RewardConfig(**record["reward_config"]),
                     **config["decisions"],
                     **policy_options(replay, config["decisions"], config.get("observation"),
                                      config.get("rl_candidate_order", "fcfs")))
-    state, info = env.reset(seed=seed)
+    state, info = env.reset(seed=seed, options={"requests": replay})
     schedule = OnlineUpdateSchedule(update_interval, min_update_seconds, min_new_outcomes, max_updates,
                                     last_time_s=info["now_s"])
     steps, observed_outcomes, learner_seconds = 0, 0, 0.0
@@ -88,7 +91,7 @@ def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.
         while not info["is_terminal"]:
             before = info["now_s"]
             request_id = info["candidate_id"]
-            q_before = model.forward(state)
+            q_before = model.forward(state) if log_transitions else None
             mask_before = info["action_mask"]
             action = model.act(state, info["action_mask"], epsilon if buffer is not None else 0)
             action_counts[int(action)] += 1
@@ -125,20 +128,21 @@ def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.
                                         max_weight_change=max(float(np.max(np.abs(model.params[k]-v))) for k,v in initial.items())))
                     schedule.mark(next_info["now_s"], observed_outcomes)
                     updated = True
-            trace.writerow(dict(
-                step=steps, request_id=request_id, action=("ADMIT", "DEFER", "DROP")[int(action)],
-                sim_before_s=before, sim_after_s=next_info["now_s"], elapsed_s=elapsed_s,
-                source_timestamp_s=source_time(next_info["now_s"]),
-                bootstrap_discount=0.0 if done else float(model.bootstrap_discounts(elapsed_s)), terminal=bool(done),
-                queue_before=info["queue_length"], queue_after=next_info["queue_length"],
-                can_admit=bool(mask_before[0]), can_defer=bool(mask_before[1]), can_drop=bool(mask_before[2]),
-                q_admit=float(q_before[0]), q_defer=float(q_before[1]), q_drop=float(q_before[2]),
-                new_outcomes=len(next_info["outcomes"]),
-                other_request_outcomes=sum(str(o.request_id) != str(request_id) for o in next_info["outcomes"]),
-                observed_outcomes=observed_outcomes, updates=model.updates, updated=updated,
-                reward_total=reward, cumulative_reward=cumulative_reward,
-                **{f"reward_{k}": breakdown[k] for k in component_names},
-            ))
+            if log_transitions:
+                trace.writerow(dict(
+                    step=steps, request_id=request_id, action=("ADMIT", "DEFER", "DROP")[int(action)],
+                    sim_before_s=before, sim_after_s=next_info["now_s"], elapsed_s=elapsed_s,
+                    source_timestamp_s=source_time(next_info["now_s"]),
+                    bootstrap_discount=0.0 if done else float(model.bootstrap_discounts(elapsed_s)), terminal=bool(done),
+                    queue_before=info["queue_length"], queue_after=next_info["queue_length"],
+                    can_admit=bool(mask_before[0]), can_defer=bool(mask_before[1]), can_drop=bool(mask_before[2]),
+                    q_admit=float(q_before[0]), q_defer=float(q_before[1]), q_drop=float(q_before[2]),
+                    new_outcomes=len(next_info["outcomes"]),
+                    other_request_outcomes=sum(str(o.request_id) != str(request_id) for o in next_info["outcomes"]),
+                    observed_outcomes=observed_outcomes, updates=model.updates, updated=updated,
+                    reward_total=reward, cumulative_reward=cumulative_reward,
+                    **{f"reward_{k}": breakdown[k] for k in component_names},
+                ))
             state, info = next_state, next_info
             if steps % 100000 == 0:
                 print(f"{policy}: decisions={steps}, updates={model.updates}, source_time={source_time(info['now_s']):.1f}", flush=True)
@@ -148,7 +152,8 @@ def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.
     settings = dict(seed=seed, epsilon=epsilon, learning_rate=learning_rate, batch_size=batch_size,
                     warmup=warmup, update_interval=update_interval, capacity=capacity, device=device,
                     min_update_seconds=min_update_seconds, min_new_outcomes=min_new_outcomes, max_updates=max_updates,
-                    discount_mode=model.discount_mode, discount_time_unit_s=model.discount_time_unit_s, gamma=model.gamma)
+                    discount_mode=model.discount_mode, discount_time_unit_s=model.discount_time_unit_s, gamma=model.gamma,
+                    log_transitions=log_transitions)
     model.save(output / f"{policy}_final.npz", dict(metadata, online_adaptation=policy == "adapting",
                online_settings=settings, learner_runtime=model.learner_runtime))
     stats = dict(policy=policy, decisions=steps, updates=model.updates,
@@ -156,7 +161,8 @@ def replay_dqn(checkpoint, record, replay, output, policy, *, seed=7, epsilon=0.
                  learner_device=model.device, learner_seconds=learner_seconds,
                  observed_outcomes=observed_outcomes, max_weight_change=change,
                  cumulative_reward=cumulative_reward, zero_time_steps=zero_time_steps,
-                 discount_mode=model.discount_mode, **{f"reward_{k}": v for k,v in reward_totals.items()},
+                 discount_mode=model.discount_mode, log_transitions=log_transitions,
+                 **{f"reward_{k}": v for k,v in reward_totals.items()},
                  wall_seconds=time.monotonic()-started, final_source_timestamp_s=source_time(info["now_s"]))
     return env.result(), stats
 

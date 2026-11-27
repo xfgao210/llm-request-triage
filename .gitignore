@@ -13,3 +13,5 @@ tmp/
 /BurstGPT_3.csv
 /data/burstgpt3/
 /results/traffic_analysis/
+.DS_Store
+.ipynb_checkpoints/

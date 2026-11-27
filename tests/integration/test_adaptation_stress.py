@@ -223,8 +223,9 @@ def test_multiple_seeds_share_baselines_and_reject_old_clock(stress_data, tmp_pa
         stress.run(training / "training", data, tmp_path / "reject-clock", windows)
 
 
-@pytest.mark.parametrize("mode,short_training", [("full", False), ("quick", False), ("quick", True)])
-def test_full_adaptation_notebook_on_small_trace(stress_data, tmp_path, monkeypatch, mode, short_training):
+@pytest.mark.parametrize("mode,short_training,reuse", [("full", False, False), ("quick", False, False),
+                                                      ("quick", True, False), ("quick", False, True)])
+def test_full_adaptation_notebook_on_small_trace(stress_data, tmp_path, monkeypatch, mode, short_training, reuse):
     pytest.importorskip("pandas")
     pytest.importorskip("IPython")
     matplotlib = pytest.importorskip("matplotlib")
@@ -239,6 +240,11 @@ def test_full_adaptation_notebook_on_small_trace(stress_data, tmp_path, monkeypa
     monkeypatch.setattr(plt, "show", lambda: plt.close("all"))
     notebook = json.loads((root / "notebooks/colab_burstgpt3_online_adaptation.ipynb").read_text())
     namespace = dict(__name__="__main__", fixture_ranges=ranges)
+    if reuse:
+        import shutil
+        reused_root = tmp_path / "reused-source"
+        shutil.copytree(data, reused_root / "data")
+        shutil.copytree(data.parent / "analysis", reused_root / "traffic_analysis")
     for cell in notebook["cells"]:
         if cell["cell_type"] != "code":
             continue
@@ -248,19 +254,31 @@ def test_full_adaptation_notebook_on_small_trace(stress_data, tmp_path, monkeypa
             # all imports and every analysis/training/replay/export cell.
             text = text[text.index("import base64"):]
         if cell["id"] == "parameters":
+            # User-saved notebook parameters can be multiline expressions.
+            # Override assignments structurally rather than relying on defaults.
+            import ast
+            overrides = dict(RUN_MODE=mode, QUICK_TRAINING=short_training, EPISODES=6,
+                             VALIDATE_EVERY=3, REUSE_TRAINING_RUN=str(reused_root / "training_run") if reuse else "")
+            lines = text.splitlines(keepends=True)
+            for node in reversed(ast.parse(text).body):
+                if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                    key = node.targets[0].id
+                    if key in overrides:
+                        lines[node.lineno-1:node.end_lineno] = [f"{key} = {overrides[key]!r}\n"]
+            text = "".join(lines)
             text = text.replace('RESULTS_ROOT = REPO / "results/runs/colab_burstgpt3_stress"',
                                 f"RESULTS_ROOT = Path({str(tmp_path / 'notebook-results')!r})")
-            text = text.replace('RUN_MODE = "quick"', f'RUN_MODE = "{mode}"')
-            text = text.replace('QUICK_TRAINING = False', f'QUICK_TRAINING = {short_training}')
-            text = text.replace('EPISODES = 24', 'EPISODES = 6')
-            text = text.replace('VALIDATE_EVERY = 4', 'VALIDATE_EVERY = 3')
         if cell["id"] == "data":
             text = text.replace('(REPO / "configs/burstgpt3_ranges.json")', "fixture_ranges")
+        if cell["id"] == "train" and reuse:
+            exec(text[:text.index("save_config(TRAIN_CONFIG_PATH")], namespace)
+            train(namespace["train_config"], namespace["DATA_DIR"], reused_root / "training_run")
         exec(compile(text, cell["id"], "exec"), namespace)
         if cell["id"] == "parameters":
             namespace.update(LOCAL_CSV_PATH=str(source),
                              EVAL_WINDOW_SECONDS=300, EVAL_ARRIVAL_MULTIPLIERS=([1, 4] if mode == "full" else [1, 4, 8]),
-                             ANALYSIS_DIR=data.parent / "analysis", DEVICE="cpu",
+                             WINDOWS_PER_GROUP=1, MIN_REQUESTS_PER_EVAL_WINDOW=1,
+                             ANALYSIS_DIR=(reused_root / "traffic_analysis" if reuse else data.parent / "analysis"), DEVICE="cpu",
                              BATCH_SIZE=4, WARMUP=8)
     output = namespace["ONLINE_OUTPUT"]
     with (output / "summary.csv").open() as stream:
@@ -278,11 +296,15 @@ def test_full_adaptation_notebook_on_small_trace(stress_data, tmp_path, monkeypa
         assert {r["arrivals"] for r in rows} == {"120"}
     assert namespace["REPORT"].stat().st_size > 10000
     diagnostic_figures = len(namespace["evaluation_windows"]) * len(namespace["ACTIVE_EVAL_MULTIPLIERS"]) * 2 * len(namespace["ACTIVE_SEEDS"])
-    assert len(namespace["generated_figures"]) == (9 if mode == "full" else 5) + diagnostic_figures
+    comparison_figures = len({w["group"] for w in namespace["evaluation_windows"]}) * len(namespace["ACTIVE_EVAL_MULTIPLIERS"])
+    assert len(namespace["generated_figures"]) == (9 if mode == "full" else 5) + diagnostic_figures + comparison_figures
     with zipfile.ZipFile(namespace["ARCHIVE"]) as archive:
         names = archive.namelist()
         assert "online_report.html" in names
         assert "execution_plan.json" in names
+        assert "window_comparison.csv" in names
+        if reuse:
+            assert "training_reuse.json" in names
         assert "stress_comparison/length_groups.csv" in names
         assert "training_run/training/training_updates_seed7.csv" in names
         assert any(name.endswith("adapting_transitions.csv") for name in names)
@@ -362,3 +384,116 @@ def test_quick_mode_filters_conditions_without_changing_windows(stress_data):
         stress.select_run_conditions(windows, [8], [7], mode="quick", quick_seed=17)
     with pytest.raises(ValueError, match="RUN_MODE"):
         stress.select_run_conditions(windows, [8], [7], mode="sample")
+
+
+def test_multiwindow_selection_is_disjoint_deterministic_and_traffic_only():
+    manifest = dict(range_config=dict(episode_seconds=300, ranges=[]), windows=[], empty_windows=[])
+    for group, origin in (("mixed_traffic", 0), ("peak_heavy", 10000)):
+        manifest["range_config"]["ranges"].append(dict(
+            split="test", group=group, start_timestamp_s=origin, end_timestamp_s=origin+2400))
+        for index, count in enumerate((1, 100, 200, 300, 400, 500, 600, 700)):
+            manifest["windows"].append(dict(split="test", start_timestamp_s=origin+index*300,
+                end_timestamp_s=origin+(index+1)*300, requests=count, input_tokens=count*20,
+                output_tokens=count*(10000 if count == 200 else 10)))
+    windows = stress.select_evaluation_windows(manifest, seconds=300, windows_per_group=5, min_requests=100)
+    assert windows == stress.select_evaluation_windows(manifest, seconds=300, windows_per_group=5, min_requests=100)
+    stress.validate_evaluation_windows(manifest, windows)
+    assert len(windows) == len({w["name"] for w in windows}) == 10
+    for group in ("mixed_traffic", "peak_heavy"):
+        selected = [w for w in windows if w["group"] == group]
+        assert {w["selection"] for w in selected} == {"typical", "burst", "token_heavy", "low_count", "high_count"}
+        assert min(w["requests"] for w in selected) == 100
+        assert next(w for w in selected if w["selection"] == "token_heavy")["requests"] == 200
+        for w in selected:
+            assert w["native_mean_rps"] == w["requests"] / 300
+            assert w["mean_output_tokens"] == w["output_tokens"] / w["requests"]
+    single = stress.select_evaluation_windows(manifest, seconds=300)
+    quick, loads, seeds = stress.select_run_conditions(windows, [8], [7], mode="quick")
+    assert quick[0]["start_timestamp_s"] == next(w for w in single if w["group"] == "peak_heavy")["start_timestamp_s"]
+    assert loads == [8] and seeds == [7]
+    with pytest.raises(ValueError, match="complete blocks"):
+        stress.select_evaluation_windows(manifest, seconds=300, windows_per_group=5, min_requests=650)
+    for value in (0, 6, True):
+        with pytest.raises(ValueError, match="windows_per_group"):
+            stress.select_evaluation_windows(manifest, windows_per_group=value)
+
+
+def test_reuse_training_preserves_checkpoint_and_rejects_changed_settings(stress_data, tmp_path):
+    data, _, config, _, _ = stress_data
+    source = tmp_path / "original"
+    train(config, data, source)
+    destination = tmp_path / "copy"
+    original = sha256(source / "training/dqn_seed7.npz")
+    copied = stress.reuse_training_run(source, destination, config)
+    assert sha256(source / "training/dqn_seed7.npz") == original == sha256(destination / "training/dqn_seed7.npz")
+    assert stress.reuse_training_run(source, destination, config) == copied
+    changed = dict(config, rl_candidate_order="length_aware")
+    with pytest.raises(ValueError, match="matching configuration"):
+        stress.reuse_training_run(source, tmp_path / "changed", changed)
+    (destination / "training/checkpoints.csv").write_text("changed")
+    with pytest.raises(ValueError, match="Destination training differs"):
+        stress.reuse_training_run(source, destination, config)
+
+
+@pytest.mark.parametrize("adapting", [False, True])
+def test_continuous_first_range_has_one_reset_per_policy(stress_data, tmp_path, monkeypatch, adapting):
+    from experiments import continuous_evaluation as continuous
+    from llm_triage.simulation import TriageKernel
+    data, manifest, config, _, _ = stress_data
+    training = tmp_path / "training"
+    train(config, data, training)
+    reset_counts = []
+    original = TriageKernel.reset
+
+    def reset(self, requests):
+        reset_counts.append(len(requests))
+        return original(self, requests)
+
+    monkeypatch.setattr(TriageKernel, "reset", reset)
+    output = tmp_path / "continuous"
+    before = sha256(training / "training/dqn_seed7.npz")
+    rows = continuous.run(training / "training", data, output, include_adapting=adapting)
+    assert len(rows) == (5 if adapting else 4)
+    assert reset_counts == [80] * len(rows)
+    assert all(r["arrivals"] == 80 for r in rows)
+    continuous.build_reports(output, data, min_arrivals=1)
+    continuous.run(training / "training", data, output, include_adapting=adapting)
+    assert reset_counts == [80] * len(rows)  # Cached cases and reporting don't reset environments.
+    assert sha256(training / "training/dqn_seed7.npz") == before
+    trace = output / "evaluation/mixed_traffic_full/load_8/frozen_seed7/frozen_transitions.csv"
+    assert len(trace.read_text().splitlines()) == 1  # Full decision logs disabled.
+
+
+def test_continuous_notebook_runs_to_export_on_small_trace(stress_data, tmp_path, monkeypatch):
+    import zipfile
+    import matplotlib
+    matplotlib.use("Agg", force=True)
+    import matplotlib.pyplot as plt
+    data, _, config, _, _ = stress_data
+    source = tmp_path / "source"
+    train(config, data, source)
+    root = Path(__file__).resolve().parents[2]
+    monkeypatch.chdir(root)
+    monkeypatch.setattr(plt, "show", lambda: plt.close("all"))
+    notebook = json.loads((root / "notebooks/colab_burstgpt3_continuous_first_test.ipynb").read_text())
+    namespace = dict(__name__="__main__")
+    for cell in notebook["cells"]:
+        if cell["cell_type"] != "code":
+            continue
+        text = "".join(cell["source"])
+        if cell["id"] == "install":
+            text = text[text.index("import pandas"):]
+        exec(compile(text, cell["id"], "exec"), namespace)
+        if cell["id"] == "parameters":
+            namespace.update(TRAINING_DIR=source / "training", DATA_DIR=data,
+                             RUN_ROOT=tmp_path / "continuous-notebook", CONFIRM_REPLAY=True,
+                             PILOT_SOURCE_MINUTES=60, PILOT_START_TIMESTAMP_S=None,
+                             INCLUDE_ADAPTING=False, SEED=7, ARRIVAL_MULTIPLIER=8,
+                             REPORT_CADENCES_MINUTES=[5, 10, 15], DISPLAY_CADENCE_MINUTES=15)
+    assert namespace["REPORT"].stat().st_size > 10000
+    with zipfile.ZipFile(namespace["ARCHIVE"]) as bundle:
+        assert "timeline_5min.csv" in bundle.namelist()
+        assert "timeline_10min.csv" in bundle.namelist()
+        assert "timeline_15min.csv" in bundle.namelist()
+        assert "source_training/dqn_seed7.npz" in bundle.namelist()
+        assert not any(p.endswith("request_diagnostics.csv") for p in bundle.namelist())
